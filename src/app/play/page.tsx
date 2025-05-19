@@ -166,18 +166,7 @@ export default function PlayPage() {
             </div>
           )}
         </CardContent>
-        <CardFooter className="pt-4 border-t flex justify-end">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={restartCurrentAdventure}
-            disabled={!gameData || !gameData.startSceneId}
-            className="shadow-sm hover:shadow-md"
-          >
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Restart This Adventure
-          </Button>
-        </CardFooter>
+        {/* Removed Restart button from here */}
       </Card>
 
       {!isGameEnd && currentScene.choices && currentScene.choices.length > 0 && (
@@ -220,14 +209,24 @@ export default function PlayPage() {
                 currentSceneId={currentSceneId}
               />
             )}
-
-            <Button variant="default" size="lg" className="shadow-md hover:shadow-lg" onClick={handleNewAdventure}>
-              <ArrowLeft className="mr-2 h-5 w-5" /> Weave a New Adventure
-            </Button>
+            <div className="flex justify-center items-center gap-4 mt-6">
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={restartCurrentAdventure}
+                disabled={!gameData || !gameData.startSceneId}
+                className="shadow-md hover:shadow-lg"
+              >
+                <RefreshCw className="mr-2 h-5 w-5" />
+                Restart Adventure
+              </Button>
+              <Button variant="default" size="lg" className="shadow-md hover:shadow-lg" onClick={handleNewAdventure}>
+                <ArrowLeft className="mr-2 h-5 w-5" /> Weave a New Adventure
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}
     </div>
   );
 }
-
