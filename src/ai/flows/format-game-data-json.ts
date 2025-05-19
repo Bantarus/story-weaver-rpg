@@ -10,8 +10,6 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
-// GameData type from context is NOT used for output here, as flow returns AI-specific schema
-// import type { GameData, SceneNode } from '@/context/GameContext';
 
 const FormatGameDataJsonInputSchema = z.object({
   narrativeOutline: z
@@ -20,10 +18,22 @@ const FormatGameDataJsonInputSchema = z.object({
 });
 export type FormatGameDataJsonInput = z.infer<typeof FormatGameDataJsonInputSchema>;
 
-// Schema for SceneChoice (remains the same)
+// Schema for Effects
+const EffectTypeSchema = z.enum(["ADD_ITEM", "REMOVE_ITEM", "ADD_STATUS", "REMOVE_STATUS"])
+  .describe("The type of effect to apply.");
+  
+const EffectSchema = z.object({
+  type: EffectTypeSchema,
+  value: z.string().describe("The identifier for the item or status (e.g., 'rusty_key', 'poisoned', 'blessed')."),
+  description: z.string().optional().describe("A short player-facing message for this effect, e.g., 'You found a Rusty Key!' or 'You feel a strange energy coursing through you.'"),
+});
+export type Effect = z.infer<typeof EffectSchema>;
+
+// Schema for SceneChoice
 const SceneChoiceSchema = z.object({
   text: z.string().describe("The text presented to the player for this choice (e.g., 'Investigate the noise', 'Flee the scene')."),
   nextNodeId: z.string().describe("The ID of the scene to transition to if this choice is selected. This ID must correspond to another scene's ID."),
+  effects: z.array(EffectSchema).optional().default([]).describe("A list of effects that occur if this choice is selected (e.g., acquiring an item, applying a status effect). Leave empty if no direct effects."),
 });
 
 // Stricter SceneNode schema for AI generation (fields are required, AI will use empty strings/defaults)
@@ -32,6 +42,7 @@ const AISceneNodeSchema = z.object({
   title: z.string().describe("A title for this scene, displayed to the player (e.g., 'The Abandoned Shack'). If not applicable, provide an empty string.").default(""),
   text: z.string().describe("The main narrative text for this scene, describing the current situation, environment, or events. Use newline characters (\\n) for paragraph breaks."),
   choices: z.array(SceneChoiceSchema).describe("A list of choices available to the player in this scene. If empty or not present (e.g. for an ending scene), provide an empty array.").default([]),
+  effects: z.array(EffectSchema).optional().default([]).describe("A list of effects that trigger when this scene initially loads (e.g., environmental effects, initial status changes). Leave empty if no scene-load effects."),
   isEnding: z.boolean().describe("Set to true if this scene represents a conclusion or significant ending point of the adventure or a branch. Otherwise, set to false.").default(false),
   endingType: z.string().describe("If isEnding is true, this field can describe the nature of the ending (e.g., 'victory', 'tragedy', 'cliffhanger'). If isEnding is false or no specific type, provide an empty string or 'none'.").default("none"),
   visualHint: z.string().describe("A brief description or keywords for a visual element that could accompany this scene (e.g., 'sun-dappled forest path'). If not applicable, provide an empty string.").default(""),
@@ -62,11 +73,13 @@ const prompt = ai.definePrompt({
   prompt: `You are an expert game designer specializing in creating interactive, text-based RPG adventures.
 Your task is to take a narrative outline and transform it into a structured JSON game dataset.
 The game should be a branching narrative where the player makes choices that lead to different scenes and outcomes.
+It should also include effects that can alter the player's state (items or status effects).
 
 Narrative Outline:
 {{{narrativeOutline}}}
 
-Please generate a JSON object adhering to the following structure. All string fields are required; if a feature is not applicable for a particular scene (e.g. title, visualHint, soundEffect, endingType), provide an empty string (""). For boolean fields like 'isEnding', provide true or false. Ensure 'endingType' is "none" if 'isEnding' is false or no specific type. 'choices' should be an empty array for ending scenes.
+Please generate a JSON object adhering to the following structure. All string fields are required; if a feature is not applicable for a particular scene (e.g. title, visualHint, soundEffect, endingType), provide an empty string (""). For boolean fields like 'isEnding', provide true or false. Ensure 'endingType' is "none" if 'isEnding' is false or no specific type. 'choices' should be an empty array for ending scenes. Effects should also be an empty array if not applicable.
+
 - \`title\` (string): An engaging title for the entire adventure. Use an empty string if not applicable. Default: "".
 - \`startSceneId\` (string): The ID of the scene where the game should begin. This must be the 'id' of one of the scenes in the \`scenes\` array.
 - \`scenes\` (JSON ARRAY of SceneNode objects): A list of all game scenes. THIS MUST BE A JSON ARRAY, where each element is a SceneNode object. Each SceneNode object in this array must have the following properties:
@@ -76,7 +89,12 @@ Please generate a JSON object adhering to the following structure. All string fi
   - \`choices\` (JSON ARRAY of SceneChoice objects): A list of actions the player can take. Each \`SceneChoice\` object has:
     - \`text\` (string): The text displayed to the player for this choice.
     - \`nextNodeId\` (string): The \`id\` of the scene to transition to if this choice is selected. This ID must correspond to another scene's 'id'.
+    - \`effects\` (JSON ARRAY of Effect objects, optional, default: []): Effects that occur if this choice is selected. An Effect object has:
+        - \`type\` (string enum: "ADD_ITEM", "REMOVE_ITEM", "ADD_STATUS", "REMOVE_STATUS"): The type of effect.
+        - \`value\` (string): The identifier for the item or status (e.g., "health_potion", "cursed").
+        - \`description\` (string, optional): Player-facing message for the effect (e.g., "You found a Health Potion!").
     If a scene is an ending, provide an empty array for choices. Default: [].
+  - \`effects\` (JSON ARRAY of Effect objects, optional, default: []): Effects that occur when this scene loads. Structure is the same as choice effects.
   - \`isEnding\` (boolean): Set to \`true\` if this scene is a conclusion, otherwise \`false\`. Default: false.
   - \`endingType\` (string): If \`isEnding\` is true, specify the nature of the ending (e.g., "victory", "tragic_defeat"). If \`isEnding\` is false or no specific type, use an empty string or "none". Default: "none".
   - \`visualHint\` (string): A brief phrase describing the visual mood or key elements. Use an empty string if not applicable. Default: "".
@@ -89,6 +107,7 @@ Ensure that:
 - The narrative flows logically based on the provided outline.
 - Scene IDs are descriptive and unique.
 - The \`startSceneId\` refers to a valid scene 'id'.
+- Effects are plausible for the narrative. For example, if a choice involves picking up a key, generate an ADD_ITEM effect for "key". If a scene describes entering a poisoned swamp, generate an ADD_STATUS effect for "poisoned".
 `,
 });
 
@@ -98,8 +117,8 @@ const formatGameDataJsonFlow = ai.defineFlow(
     inputSchema: FormatGameDataJsonInputSchema,
     outputSchema: AIGameDataSchema, // The flow's final output will be validated against this
   },
-  async (input): Promise<FormatGameDataJsonOutput> => { // Ensure promise returns the correct type
-    const llmResponse = await prompt(input); // Returns GenerateResponse
+  async (input): Promise<FormatGameDataJsonOutput> => { 
+    const llmResponse = await prompt(input); 
     let aiOutputText = llmResponse.text;
 
     if (!aiOutputText) {
@@ -111,17 +130,17 @@ const formatGameDataJsonFlow = ai.defineFlow(
 
     // Strip Markdown fences if present
     if (aiOutputText.startsWith("```json")) {
-      aiOutputText = aiOutputText.substring(7); // Remove ```json\n
+      aiOutputText = aiOutputText.substring(7); 
       if (aiOutputText.endsWith("```")) {
         aiOutputText = aiOutputText.substring(0, aiOutputText.length - 3);
       }
-    } else if (aiOutputText.startsWith("```")) { // In case it's just ```
+    } else if (aiOutputText.startsWith("```")) { 
         aiOutputText = aiOutputText.substring(3);
         if (aiOutputText.endsWith("```")) {
             aiOutputText = aiOutputText.substring(0, aiOutputText.length - 3);
         }
     }
-    aiOutputText = aiOutputText.trim(); // Trim again after stripping
+    aiOutputText = aiOutputText.trim(); 
 
     let parsedJsonFromAI: any;
     try {
@@ -144,15 +163,16 @@ const formatGameDataJsonFlow = ai.defineFlow(
       throw new Error('AI output did not contain a valid scenes structure (expected array or object).');
     }
     
-    const processedGameData = {
+    const processedGameDataForOutput = {
       title: parsedJsonFromAI.title || "", 
       startSceneId: parsedJsonFromAI.startSceneId || "", 
       scenes: scenesArrayFromAI, 
     };
 
     // Validate the processed data against AIGameDataSchema before returning
+    // This ensures the flow's output contract is met.
     try {
-        const validatedData = AIGameDataSchema.parse(processedGameData);
+        const validatedData = AIGameDataSchema.parse(processedGameDataForOutput);
         
         // Ensure startSceneId is valid
         if (!validatedData.startSceneId || !validatedData.scenes.find(scene => scene.id === validatedData.startSceneId)) {
@@ -161,15 +181,16 @@ const formatGameDataJsonFlow = ai.defineFlow(
             console.warn(`Generated startSceneId '${validatedData.startSceneId}' not found or invalid. Defaulting to first available scene: ${availableSceneIds[0]}`);
             validatedData.startSceneId = availableSceneIds[0];
           } else {
-            throw new Error('AI generated game data with no scenes or an invalid startSceneId after initial processing.');
+            console.error('AI generated game data with no scenes or an invalid startSceneId after initial processing.');
+            // Consider throwing specific error or attempting a more robust recovery if possible
+            throw new Error('Critical data error: No valid scenes or startSceneId available from AI output.');
           }
         }
         return validatedData; // This now directly matches FormatGameDataJsonOutput
     } catch (validationError) {
         console.error("Processed AI output does not match AIGameDataSchema:", validationError);
-        console.error("Data that failed validation:", JSON.stringify(processedGameData, null, 2));
-        throw new Error("Internal error: Processed AI output is not valid according to AIGameDataSchema.");
+        console.error("Data that failed validation:", JSON.stringify(processedGameDataForOutput, null, 2));
+        throw new Error("Internal error: Processed AI output is not valid according to AIGameDataSchema. Check console for data structure mismatch.");
     }
   }
 );
-

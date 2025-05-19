@@ -3,6 +3,7 @@
 
 import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { useToast } from '@/hooks/use-toast'; // Import useToast
 
 // LocalStorage Keys
 const STORY_TEXT_KEY = 'storyWeaver_storyText';
@@ -17,8 +18,20 @@ const GAME_DATA_KEY = 'storyWeaver_gameData'; // For the currently active game
 const CURRENT_SCENE_ID_KEY = 'storyWeaver_currentSceneId'; // For the currently active game
 const CREATION_STEP_KEY = 'storyWeaver_creationStep';
 const GAME_HISTORY_KEY = 'storyWeaver_gameHistory'; // For the currently active game
+const PLAYER_INVENTORY_KEY = 'storyWeaver_playerInventory';
+const PLAYER_STATUS_EFFECTS_KEY = 'storyWeaver_playerStatusEffects';
+
 
 const SAVED_ADVENTURES_KEY = 'storyWeaver_savedAdventures'; // For the library
+
+// Effect Definitions
+export type EffectType = "ADD_ITEM" | "REMOVE_ITEM" | "ADD_STATUS" | "REMOVE_STATUS";
+
+export interface Effect {
+  type: EffectType;
+  value: string; // e.g., "rusty_key", "poisoned"
+  description?: string; // Player-facing message, e.g., "You found a Rusty Key!"
+}
 
 // Defines the structure of the game data JSON
 export interface GameData {
@@ -34,6 +47,7 @@ export interface SceneNode {
   title?: string;
   text: string;
   choices: SceneChoice[];
+  effects?: Effect[]; // Effects that trigger when this scene loads
   visualHint?: string;
   soundEffect?: string;
   isEnding?: boolean;
@@ -43,6 +57,7 @@ export interface SceneNode {
 export interface SceneChoice {
   text: string;
   nextNodeId: string;
+  effects?: Effect[]; // Effects that trigger when this choice is selected
 }
 
 export type CreationStep = 'story' | 'character' | 'generate' | 'error';
@@ -55,7 +70,7 @@ interface GameContextType {
   setStoryText: (text: string | null) => void;
   characterDescription: string | null;
   setCharacterDescription: (desc: string | null) => void;
-  analysisResult: any | null; 
+  analysisResult: any | null;
   setAnalysisResult: (result: any | null) => void;
   narrativeOutline: string | null;
   setNarrativeOutline: (outline: string | null) => void;
@@ -74,13 +89,18 @@ interface GameContextType {
   currentSceneId: string | null;
   setCurrentSceneId: (id: string | null) => void;
   gameHistory: string[];
-  
+
+  // Player State
+  playerInventory: string[];
+  playerStatusEffects: string[];
+  applyEffects: (effectsToApply?: Effect[]) => void;
+
   // UI State
   isLoading: boolean;
   setIsLoading: (loading: boolean) => void;
   error: string | null;
   setError: (error: string | null) => void;
-  creationStep: CreationStep; 
+  creationStep: CreationStep;
   setCreationStep: (step: CreationStep) => void;
 
   // Library State & Functions
@@ -99,6 +119,8 @@ interface GameContextType {
 const GameContext = createContext<GameContextType | undefined>(undefined);
 
 export const GameProvider = ({ children }: { children: ReactNode }) => {
+  const { toast } = useToast(); // Initialize useToast
+
   // Creation states
   const [storyText, setStoryTextState] = useState<string | null>(null);
   const [characterDescription, setCharacterDescriptionState] = useState<string | null>(null);
@@ -113,7 +135,11 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
   const [gameData, setGameDataState] = useState<GameData | null>(null);
   const [currentSceneId, setCurrentSceneIdState] = useState<string | null>(null);
   const [gameHistory, setGameHistoryState] = useState<string[]>([]);
-  
+
+  // Player states
+  const [playerInventory, setPlayerInventoryState] = useState<string[]>([]);
+  const [playerStatusEffects, setPlayerStatusEffectsState] = useState<string[]>([]);
+
   // UI states
   const [isLoading, setIsLoadingState] = useState(false);
   const [error, setErrorState] = useState<string | null>(null);
@@ -148,9 +174,14 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
     const storedGameHistory = localStorage.getItem(GAME_HISTORY_KEY);
     if (storedGameHistory) setGameHistoryState(JSON.parse(storedGameHistory));
 
+    const storedPlayerInventory = localStorage.getItem(PLAYER_INVENTORY_KEY);
+    if (storedPlayerInventory) setPlayerInventoryState(JSON.parse(storedPlayerInventory));
+    const storedPlayerStatusEffects = localStorage.getItem(PLAYER_STATUS_EFFECTS_KEY);
+    if (storedPlayerStatusEffects) setPlayerStatusEffectsState(JSON.parse(storedPlayerStatusEffects));
+
     const storedSavedAdventures = localStorage.getItem(SAVED_ADVENTURES_KEY);
     if (storedSavedAdventures) setSavedAdventuresState(JSON.parse(storedSavedAdventures));
-    
+
     setIsLoaded(true);
   }, []);
 
@@ -159,7 +190,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
     if (isLoaded && gameData && gameData.startSceneId) {
       if (currentSceneId === gameData.startSceneId && gameHistory.length === 0) {
         setGameHistoryState([gameData.startSceneId]);
-      } else if (gameHistory.length === 0 && (!currentSceneId || (gameData.scenes && !gameData.scenes[currentSceneId]))) { 
+      } else if (gameHistory.length === 0 && (!currentSceneId || (gameData.scenes && !gameData.scenes[currentSceneId]))) {
          setGameHistoryState([gameData.startSceneId]);
          setCurrentSceneIdState(gameData.startSceneId);
       }
@@ -176,10 +207,13 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => { if (isLoaded) desiredLength ? localStorage.setItem(DESIRED_LENGTH_KEY, desiredLength) : localStorage.removeItem(DESIRED_LENGTH_KEY); }, [desiredLength, isLoaded]);
   useEffect(() => { if (isLoaded) keyThemes ? localStorage.setItem(KEY_THEMES_KEY, keyThemes) : localStorage.removeItem(KEY_THEMES_KEY); }, [keyThemes, isLoaded]);
   useEffect(() => { if (isLoaded) localStorage.setItem(CREATION_STEP_KEY, creationStep); }, [creationStep, isLoaded]);
-  
+
   useEffect(() => { if (isLoaded) gameData ? localStorage.setItem(GAME_DATA_KEY, JSON.stringify(gameData)) : localStorage.removeItem(GAME_DATA_KEY); }, [gameData, isLoaded]);
   useEffect(() => { if (isLoaded) currentSceneId ? localStorage.setItem(CURRENT_SCENE_ID_KEY, currentSceneId) : localStorage.removeItem(CURRENT_SCENE_ID_KEY); }, [currentSceneId, isLoaded]);
   useEffect(() => { if (isLoaded) gameHistory.length > 0 ? localStorage.setItem(GAME_HISTORY_KEY, JSON.stringify(gameHistory)) : localStorage.removeItem(GAME_HISTORY_KEY); }, [gameHistory, isLoaded]);
+
+  useEffect(() => { if (isLoaded) playerInventory.length > 0 ? localStorage.setItem(PLAYER_INVENTORY_KEY, JSON.stringify(playerInventory)) : localStorage.removeItem(PLAYER_INVENTORY_KEY); }, [playerInventory, isLoaded]);
+  useEffect(() => { if (isLoaded) playerStatusEffects.length > 0 ? localStorage.setItem(PLAYER_STATUS_EFFECTS_KEY, JSON.stringify(playerStatusEffects)) : localStorage.removeItem(PLAYER_STATUS_EFFECTS_KEY); }, [playerStatusEffects, isLoaded]);
 
   // Save saved adventures library to localStorage
   useEffect(() => { if (isLoaded) localStorage.setItem(SAVED_ADVENTURES_KEY, JSON.stringify(savedAdventures)); }, [savedAdventures, isLoaded]);
@@ -192,17 +226,6 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
   const setDesiredTone = useCallback((tone: DesiredTone) => setDesiredToneState(tone), []);
   const setDesiredLength = useCallback((length: DesiredLength) => setDesiredLengthState(length), []);
   const setKeyThemes = useCallback((themes: string | null) => setKeyThemesState(themes), []);
-  
-  const setGameDataInternal = useCallback((data: GameData | null) => {
-    setGameDataState(data);
-    if (data && data.startSceneId) {
-      setCurrentSceneIdState(data.startSceneId);
-      setGameHistoryState([data.startSceneId]); // Initialize history when new game data is set
-    } else if (!data) { // If gameData is cleared
-      setCurrentSceneIdState(null);
-      setGameHistoryState([]);
-    }
-  }, []);
 
   const setCurrentSceneId = useCallback((id: string | null) => {
     setCurrentSceneIdState(id);
@@ -211,73 +234,60 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
         if (prevHistory.length === 0 && gameData && id === gameData.startSceneId) {
           return [id];
         }
-        if (prevHistory.length > 0 && prevHistory[prevHistory.length - 1] !== id) {
-          if (gameData && gameData.scenes[id]) {
+        // Only add to history if it's a new scene ID and the scene exists
+        if (prevHistory.length > 0 && prevHistory[prevHistory.length - 1] !== id && gameData && gameData.scenes[id]) {
             return [...prevHistory, id];
-          }
         }
         return prevHistory;
       });
     }
-  }, [gameData]); // gameData dependency is important here
+  }, [gameData]); // Depends on gameData to validate scene IDs
 
   const setCreationStep = useCallback((step: CreationStep) => setCreationStepState(step), []);
   const setIsLoading = useCallback((loading: boolean) => setIsLoadingState(loading), []);
   const setError = useCallback((error: string | null) => setErrorState(error), []);
 
-  // Library functions
-  const saveAdventureToLibrary = useCallback((name: string): boolean => {
-    if (!gameData) return false; // Cannot save if there's no active game data
+  // Effect application logic
+  const addItemToInventory = useCallback((itemValue: string) => {
+    setPlayerInventoryState(prev => prev.includes(itemValue) ? prev : [...prev, itemValue]);
+  }, []);
 
-    const adventureToSave: GameData = {
-      ...gameData, // Spread current game data
-      id: gameData.id || crypto.randomUUID(), // Use existing ID if re-saving, else new ID
-      adventureName: name,
-    };
+  const removeItemFromInventory = useCallback((itemValue: string) => {
+    setPlayerInventoryState(prev => prev.filter(item => item !== itemValue));
+  }, []);
 
-    setSavedAdventuresState(prevAdventures => {
-      const existingIndex = prevAdventures.findIndex(adv => adv.id === adventureToSave.id);
-      if (existingIndex > -1) {
-        // Update existing adventure
-        const updatedAdventures = [...prevAdventures];
-        updatedAdventures[existingIndex] = adventureToSave;
-        return updatedAdventures;
-      } else {
-        // Add new adventure
-        return [...prevAdventures, adventureToSave];
+  const addPlayerStatus = useCallback((statusValue: string) => {
+    setPlayerStatusEffectsState(prev => prev.includes(statusValue) ? prev : [...prev, statusValue]);
+  }, []);
+
+  const removePlayerStatus = useCallback((statusValue: string) => {
+    setPlayerStatusEffectsState(prev => prev.filter(status => status !== statusValue));
+  }, []);
+
+  const applyEffects = useCallback((effectsToApply?: Effect[]) => {
+    if (!effectsToApply || effectsToApply.length === 0) return;
+
+    effectsToApply.forEach(effect => {
+      switch (effect.type) {
+        case "ADD_ITEM":
+          addItemToInventory(effect.value);
+          break;
+        case "REMOVE_ITEM":
+          removeItemFromInventory(effect.value);
+          break;
+        case "ADD_STATUS":
+          addPlayerStatus(effect.value);
+          break;
+        case "REMOVE_STATUS":
+          removePlayerStatus(effect.value);
+          break;
+      }
+      if (effect.description) {
+        toast({ title: "Effect Triggered!", description: effect.description, className: "bg-accent text-accent-foreground" });
       }
     });
-    // Also update the current gameData in context to have the new ID and name, if it was a new save
-    if (!gameData.id) {
-      setGameDataState(adventureToSave);
-    }
-    return true;
-  }, [gameData]);
+  }, [addItemToInventory, removeItemFromInventory, addPlayerStatus, removePlayerStatus, toast]);
 
-  const loadAdventureFromLibrary = useCallback((adventureId: string): boolean => {
-    const adventureToLoad = savedAdventures.find(adv => adv.id === adventureId);
-    if (adventureToLoad) {
-      setGameDataInternal(adventureToLoad); // This will also set sceneId and history
-      // Clear creation-specific states as we are loading a full game
-      resetCreationProgress();
-      setCreationStepState('generate'); // Or perhaps a new step like 'playing_from_library'
-      return true;
-    }
-    return false;
-  }, [savedAdventures, setGameDataInternal]);
-
-  const deleteAdventureFromLibrary = useCallback((adventureId: string) => {
-    setSavedAdventuresState(prevAdventures => prevAdventures.filter(adv => adv.id !== adventureId));
-    // If the deleted adventure was the currently active one, reset active game
-    if (gameData && gameData.id === adventureId) {
-        resetFullGame();
-    }
-  }, [gameData]);
-
-  const isAdventureInLibrary = useCallback((adventureId?: string) => {
-    if (!adventureId) return false;
-    return savedAdventures.some(adv => adv.id === adventureId);
-  }, [savedAdventures]);
 
   // Persistence control functions
   const resetCreationProgress = useCallback(() => {
@@ -288,7 +298,6 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
     setDesiredToneState("Default");
     setDesiredLengthState("Default");
     setKeyThemesState(null);
-    // setCreationStepState('story'); // Don't reset step if loading from library
     localStorage.removeItem(STORY_TEXT_KEY);
     localStorage.removeItem(CHARACTER_DESC_KEY);
     localStorage.removeItem(ANALYSIS_RESULT_KEY);
@@ -296,39 +305,112 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
     localStorage.removeItem(DESIRED_TONE_KEY);
     localStorage.removeItem(DESIRED_LENGTH_KEY);
     localStorage.removeItem(KEY_THEMES_KEY);
-    // localStorage.setItem(CREATION_STEP_KEY, 'story'); 
-    setErrorState(null); 
+    setErrorState(null);
   }, []);
 
-  const resetFullGame = useCallback(() => { // Resets the *active* game, not the library
+  const resetFullGame = useCallback(() => {
     resetCreationProgress();
-    setGameDataState(null); // Clears gameData
+    setGameDataState(null);
     setCurrentSceneIdState(null);
     setGameHistoryState([]);
-    setCreationStepState('story'); // Reset creation flow to start
+    setPlayerInventoryState([]);
+    setPlayerStatusEffectsState([]);
+    setCreationStepState('story');
     localStorage.removeItem(GAME_DATA_KEY);
     localStorage.removeItem(CURRENT_SCENE_ID_KEY);
     localStorage.removeItem(GAME_HISTORY_KEY);
+    localStorage.removeItem(PLAYER_INVENTORY_KEY);
+    localStorage.removeItem(PLAYER_STATUS_EFFECTS_KEY);
     localStorage.setItem(CREATION_STEP_KEY, 'story');
-    setErrorState(null); 
-  }, [resetCreationProgress]);
+    setErrorState(null);
+  }, [resetCreationProgress]); // Depends on stable resetCreationProgress
+
+  const setGameDataInternal = useCallback((data: GameData | null) => {
+    setGameDataState(data);
+    if (data && data.startSceneId) {
+      setCurrentSceneIdState(data.startSceneId);
+      setGameHistoryState([data.startSceneId]);
+      setPlayerInventoryState([]); // Reset inventory for new game
+      setPlayerStatusEffectsState([]); // Reset status for new game
+    } else if (!data) { // If gameData is cleared
+      setCurrentSceneIdState(null);
+      setGameHistoryState([]);
+      setPlayerInventoryState([]);
+      setPlayerStatusEffectsState([]);
+    }
+  }, []); // Relies only on direct state setters
+
+  // Library functions
+  const saveAdventureToLibrary = useCallback((name: string): boolean => {
+    if (!gameData) return false;
+
+    const adventureToSave: GameData = {
+      ...gameData,
+      id: gameData.id || crypto.randomUUID(),
+      adventureName: name,
+    };
+
+    setSavedAdventuresState(prevAdventures => {
+      const existingIndex = prevAdventures.findIndex(adv => adv.id === adventureToSave.id);
+      if (existingIndex > -1) {
+        const updatedAdventures = [...prevAdventures];
+        updatedAdventures[existingIndex] = adventureToSave;
+        return updatedAdventures;
+      } else {
+        return [...prevAdventures, adventureToSave];
+      }
+    });
+    // Update active game data in context if it was a new save, so it now has an ID
+    if (!gameData.id) {
+        setGameDataState(adventureToSave);
+    }
+    return true;
+  }, [gameData]); // Depends on gameData state
+
+  const loadAdventureFromLibrary = useCallback((adventureId: string): boolean => {
+    const adventureToLoad = savedAdventures.find(adv => adv.id === adventureId);
+    if (adventureToLoad) {
+      setGameDataInternal(adventureToLoad); // This also resets history, inventory, status
+      resetCreationProgress(); // Clear any in-progress creation inputs
+      setCreationStepState('generate'); // Effectively "adventure loaded and ready"
+      return true;
+    }
+    return false;
+  }, [savedAdventures, setGameDataInternal, resetCreationProgress]); // Depends on savedAdventures and other stable callbacks
+
+  const deleteAdventureFromLibrary = useCallback((adventureId: string) => {
+    setSavedAdventuresState(prevAdventures => prevAdventures.filter(adv => adv.id !== adventureId));
+    if (gameData && gameData.id === adventureId) {
+        resetFullGame(); // Clear active game if it was the one deleted
+    }
+  }, [gameData, resetFullGame]); // Depends on gameData and stable resetFullGame
+
+
+  const isAdventureInLibrary = useCallback((adventureId?: string) => {
+    if (!adventureId) return false;
+    return savedAdventures.some(adv => adv.id === adventureId);
+  }, [savedAdventures]);
+
 
   const restartCurrentAdventure = useCallback(() => {
     if (gameData && gameData.startSceneId && gameData.scenes && gameData.scenes[gameData.startSceneId]) {
       setCurrentSceneIdState(gameData.startSceneId);
       setGameHistoryState([gameData.startSceneId]);
+      setPlayerInventoryState([]);
+      setPlayerStatusEffectsState([]);
       setErrorState(null);
     } else {
       console.warn("Cannot restart adventure: gameData, startSceneId, or start scene is missing/invalid.");
+      resetFullGame(); // Fallback to full reset if adventure data is broken
     }
-  }, [gameData]); 
+  }, [gameData, resetFullGame]); // Depends on gameData and stable resetFullGame
 
   if (!isLoaded) {
-    return null; 
+    return null;
   }
 
   return (
-    <GameContext.Provider value={{ 
+    <GameContext.Provider value={{
       storyText, setStoryText,
       characterDescription, setCharacterDescription,
       analysisResult, setAnalysisResult,
@@ -336,12 +418,16 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
       desiredTone, setDesiredTone,
       desiredLength, setDesiredLength,
       keyThemes, setKeyThemes,
-      
-      gameData, setGameData: setGameDataInternal, 
+
+      gameData, setGameData: setGameDataInternal,
       currentSceneId, setCurrentSceneId,
       gameHistory,
-      
-      isLoading, setIsLoading, 
+
+      playerInventory,
+      playerStatusEffects,
+      applyEffects,
+
+      isLoading, setIsLoading,
       error, setError,
       creationStep, setCreationStep,
 
