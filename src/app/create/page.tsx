@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, BookText, UserPlus, Wand2, AlertCircle, CheckCircle, Play, Palette, Scale, Sparkles, RefreshCcw } from "lucide-react";
+import { Loader2, BookText, UserPlus, Wand2, AlertCircle, CheckCircle, Play, Palette, Scale, Sparkles, RefreshCcw, Save, Library } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 import { analyzeSourceMaterial } from "@/ai/flows/analyze-source-material";
@@ -38,11 +38,14 @@ export default function CreatePage() {
     desiredTone, setDesiredTone,
     desiredLength, setDesiredLength,
     keyThemes, setKeyThemes,
+    gameData, // Get gameData to check for saving
     setGameData,
     isLoading, setIsLoading,
     error, setError,
     creationStep, setCreationStep,
-    resetCreationProgress
+    resetCreationProgress,
+    saveAdventureToLibrary, // New context function
+    isAdventureInLibrary // New context function
   } = useGame();
 
   // Local state for character form inputs (name, archetype, background, goals)
@@ -89,7 +92,7 @@ export default function CreatePage() {
   const progressValue = {
     story: 0,
     character: 33,
-    generate: 66,
+    generate: 66, // This step will persist until user chooses to play or save
     error: creationStep === 'story' ? 0 : creationStep === 'character' ? 33 : 66,
   }[creationStep];
 
@@ -177,59 +180,59 @@ export default function CreatePage() {
     setIsLoading(true);
     setError(null);
     try {
+      let finalGameDataToSet: GameData | null = null;
+
       if (USE_MOCK_GENERATION) {
-        setGameData(mockGameData as GameData); 
-        toast({ title: "Mock RPG Weaved!", description: "Your mock adventure is ready. Redirecting to game...", className: "bg-primary text-primary-foreground" });
-        resetCreationProgress(); 
-        router.push("/play");
-        return;
-      }
-
-      if (!narrativeOutline) { 
-        throw new Error("Narrative outline not found. Please go back to the character step.");
-      }
-      
-      const aiFormattedGameData: FormatGameDataJsonOutput = await formatGameDataJson({ narrativeOutline });
-      
-      if (!aiFormattedGameData || !aiFormattedGameData.scenes || !aiFormattedGameData.startSceneId || aiFormattedGameData.scenes.length === 0) {
-        throw new Error("Received incomplete or invalid game data structure from AI.");
-      }
-      
-      const scenesRecord: Record<string, SceneNode> = {};
-      aiFormattedGameData.scenes.forEach((aiScene: AISceneNode) => {
-        scenesRecord[aiScene.id] = {
-          id: aiScene.id,
-          title: aiScene.title && aiScene.title.trim() !== "" ? aiScene.title.trim() : undefined,
-          text: aiScene.text,
-          choices: aiScene.choices, 
-          isEnding: aiScene.isEnding,
-          endingType: aiScene.endingType && aiScene.endingType.trim() !== "" && aiScene.endingType.trim().toLowerCase() !== "none" ? aiScene.endingType.trim() : undefined,
-          visualHint: aiScene.visualHint && aiScene.visualHint.trim() !== "" ? aiScene.visualHint.trim() : undefined,
-          soundEffect: aiScene.soundEffect && aiScene.soundEffect.trim() !== "" ? aiScene.soundEffect.trim() : undefined,
-        };
-      });
-      
-      let finalStartSceneId = aiFormattedGameData.startSceneId;
-      if (!scenesRecord[finalStartSceneId]) {
-        const availableSceneIds = Object.keys(scenesRecord);
-        if (availableSceneIds.length > 0) {
-          console.warn(`AI-generated startSceneId '${finalStartSceneId}' not found in processed scenes. Defaulting to first available scene: ${availableSceneIds[0]}`);
-          finalStartSceneId = availableSceneIds[0];
-        } else {
-          throw new Error('AI generated game data with no processable scenes.');
+        finalGameDataToSet = mockGameData as GameData;
+        toast({ title: "Mock RPG Weaved!", description: "Your mock adventure is ready to play or save.", className: "bg-primary text-primary-foreground" });
+      } else {
+        if (!narrativeOutline) { 
+          throw new Error("Narrative outline not found. Please go back to the character step.");
         }
-      }
+        
+        const aiFormattedGameData: FormatGameDataJsonOutput = await formatGameDataJson({ narrativeOutline });
+        
+        if (!aiFormattedGameData || !aiFormattedGameData.scenes || !aiFormattedGameData.startSceneId || aiFormattedGameData.scenes.length === 0) {
+          throw new Error("Received incomplete or invalid game data structure from AI.");
+        }
+        
+        const scenesRecord: Record<string, SceneNode> = {};
+        aiFormattedGameData.scenes.forEach((aiScene: AISceneNode) => {
+          scenesRecord[aiScene.id] = {
+            id: aiScene.id,
+            title: aiScene.title && aiScene.title.trim() !== "" ? aiScene.title.trim() : undefined,
+            text: aiScene.text,
+            choices: aiScene.choices, 
+            isEnding: aiScene.isEnding,
+            endingType: aiScene.endingType && aiScene.endingType.trim() !== "" && aiScene.endingType.trim().toLowerCase() !== "none" ? aiScene.endingType.trim() : undefined,
+            visualHint: aiScene.visualHint && aiScene.visualHint.trim() !== "" ? aiScene.visualHint.trim() : undefined,
+            soundEffect: aiScene.soundEffect && aiScene.soundEffect.trim() !== "" ? aiScene.soundEffect.trim() : undefined,
+          };
+        });
+        
+        let finalStartSceneId = aiFormattedGameData.startSceneId;
+        if (!scenesRecord[finalStartSceneId]) {
+          const availableSceneIds = Object.keys(scenesRecord);
+          if (availableSceneIds.length > 0) {
+            console.warn(`AI-generated startSceneId '${finalStartSceneId}' not found in processed scenes. Defaulting to first available scene: ${availableSceneIds[0]}`);
+            finalStartSceneId = availableSceneIds[0];
+          } else {
+            throw new Error('AI generated game data with no processable scenes.');
+          }
+        }
 
-      const finalGameData: GameData = {
-        title: aiFormattedGameData.title && aiFormattedGameData.title.trim() !== "" ? aiFormattedGameData.title.trim() : undefined,
-        startSceneId: finalStartSceneId,
-        scenes: scenesRecord,
-      };
+        finalGameDataToSet = {
+          // id will be set if loaded from library or after first save
+          title: aiFormattedGameData.title && aiFormattedGameData.title.trim() !== "" ? aiFormattedGameData.title.trim() : undefined,
+          startSceneId: finalStartSceneId,
+          scenes: scenesRecord,
+        };
+        toast({ title: "RPG Weaved!", description: "Your adventure is ready to play or save.", className: "bg-primary text-primary-foreground" });
+      }
       
-      setGameData(finalGameData);
-      toast({ title: "RPG Weaved!", description: "Your adventure is ready. Redirecting to game...", className: "bg-primary text-primary-foreground" });
-      resetCreationProgress(); 
-      router.push("/play");
+      setGameData(finalGameDataToSet);
+      // DO NOT navigate or resetCreationProgress here. User will choose to Play or Save.
+      // setCreationStep("generate") is already the current step.
 
     } catch (err) {
       console.error("Error formatting/generating game data:", err);
@@ -241,25 +244,56 @@ export default function CreatePage() {
         }
       }
       setError(errorMessage);
-      setCreationStep('error'); // Keep user on current step or 'generate' if error occurs here
+      setCreationStep('error'); 
       toast({ variant: "destructive", title: "Game Generation Failed", description: errorMessage, duration: 7000 });
     } finally {
       setIsLoading(false);
     }
   };
+
+  const handleSaveAdventureClick = () => {
+    if (!gameData) {
+      toast({ variant: "destructive", title: "Cannot Save", description: "No game data available to save." });
+      return;
+    }
+    const defaultName = gameData.adventureName || gameData.title || "My Awesome Adventure";
+    const adventureName = window.prompt("Enter a name for your adventure:", defaultName);
+
+    if (adventureName) {
+      if (saveAdventureToLibrary(adventureName)) {
+        toast({ title: "Adventure Saved!", description: `"${adventureName}" has been saved to your library.`, className: "bg-primary text-primary-foreground" });
+      } else {
+        toast({ variant: "destructive", title: "Save Failed", description: "Could not save the adventure." });
+      }
+    } else {
+      toast({ title: "Save Cancelled", description: "Adventure was not saved." });
+    }
+  };
+  
+  const handlePlayNowClick = () => {
+    if (!gameData) {
+      toast({ variant: "destructive", title: "Cannot Play", description: "No game data available to play."});
+      setError("No game data to play. Please generate an adventure first.");
+      setCreationStep('error');
+      return;
+    }
+    resetCreationProgress(); 
+    router.push("/play");
+  };
   
   const handleTryAgainOnError = () => {
     setError(null);
-    // Attempt to go back to the previous logical step based on where the error might have occurred.
-    // This is a simple heuristic. A more robust solution might store the last successful step.
-    if (narrativeOutline) { // If outline exists, error likely in final generation
+    if (narrativeOutline) { 
         setCreationStep('generate');
-    } else if (analysisResult) { // If analysis exists, error likely in outline generation
+    } else if (analysisResult) { 
         setCreationStep('character');
-    } else { // Otherwise, error likely in story analysis
+    } else { 
         setCreationStep('story');
     }
   };
+
+  const isCurrentAdventureSaved = gameData && gameData.id && isAdventureInLibrary(gameData.id);
+
 
   return (
     <div className="max-w-2xl mx-auto space-y-8">
@@ -283,7 +317,7 @@ export default function CreatePage() {
             <Button onClick={handleTryAgainOnError} variant="outline" className="w-full">
                 <RefreshCcw className="mr-2 h-4 w-4" /> Try Again from Previous Step
             </Button>
-            <Button onClick={() => { resetCreationProgress(); setCreationStep('story');}} variant="destructive" className="w-full">
+            <Button onClick={() => { resetCreationProgress(); setGameData(null); setCreationStep('story');}} variant="destructive" className="w-full">
                 Start Over
             </Button>
           </div>
@@ -400,29 +434,70 @@ export default function CreatePage() {
         </Card>
       )}
       
-      {creationStep === "generate" && narrativeOutline && !error && (
+      {creationStep === "generate" && !error && (
         <Card className="shadow-lg">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-2xl"><CheckCircle className="text-green-500" /> Step 3: Weave Your RPG</CardTitle>
-            <CardDescription>
-              {USE_MOCK_GENERATION 
-                ? "The mock narrative outline is ready. Click below to generate the mock RPG data." 
-                : "Your story and character are ready. The AI has generated a narrative outline. Click below to generate the full RPG data."
-              }
-            </CardDescription>
+            <CardTitle className="flex items-center gap-2 text-2xl">
+              {!gameData ? <Wand2 /> : <CheckCircle className="text-green-500" />}
+              Step 3: {!gameData ? "Weave Your RPG" : "Adventure Ready!"}
+            </CardTitle>
+            {!gameData && narrativeOutline && (
+              <CardDescription>
+                {USE_MOCK_GENERATION 
+                  ? "The mock narrative outline is ready. Click below to generate the mock RPG data." 
+                  : "Your story and character are ready. The AI has generated a narrative outline. Click below to generate the full RPG data."
+                }
+              </CardDescription>
+            )}
+            {gameData && (
+              <CardDescription>
+                Your adventure "{gameData.adventureName || gameData.title || "Untitled Adventure"}" is woven! You can save it to your library or play it now.
+              </CardDescription>
+            )}
           </CardHeader>
           <CardContent>
-            <h4 className="font-semibold mb-2">
-              {USE_MOCK_GENERATION ? "Mock Narrative Outline Snippet:" : "Generated Narrative Outline Snippet:"}
-            </h4>
-            <Textarea value={narrativeOutline.substring(0, 300) + (narrativeOutline.length > 300 ? "..." : "")} readOnly rows={5} className="bg-muted/50" />
+            {!gameData && narrativeOutline && (
+              <>
+                <h4 className="font-semibold mb-2">
+                  {USE_MOCK_GENERATION ? "Mock Narrative Outline Snippet:" : "Generated Narrative Outline Snippet:"}
+                </h4>
+                <Textarea value={narrativeOutline.substring(0, 300) + (narrativeOutline.length > 300 ? "..." : "")} readOnly rows={5} className="bg-muted/50" />
+              </>
+            )}
+             {gameData && (
+              <Alert variant="default" className="bg-green-50 border-green-300 text-green-700">
+                <CheckCircle className="h-4 w-4 !text-green-700" />
+                <AlertTitle>Ready to Go!</AlertTitle>
+                <AlertDescription>
+                  Your adventure data has been successfully generated.
+                  {gameData.title && <p className="mt-1"><strong>Title:</strong> {gameData.title}</p>}
+                  <p className="mt-1"><strong>Start Scene:</strong> {gameData.scenes[gameData.startSceneId]?.title || gameData.startSceneId}</p>
+                </AlertDescription>
+              </Alert>
+            )}
           </CardContent>
-          <CardFooter className="flex justify-between">
-            <Button variant="outline" onClick={() => setCreationStep("character")} disabled={isLoading}>Back to Character</Button>
-            <Button onClick={handleGenerateGame} disabled={isLoading} className="w-1/2">
-              {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
-              {USE_MOCK_GENERATION ? "Weave Mock RPG!" : "Weave Your RPG!"}
+          <CardFooter className="flex flex-col sm:flex-row justify-between gap-2">
+            <Button variant="outline" onClick={() => setCreationStep("character")} disabled={isLoading || !!gameData}>
+              Back to Character {!gameData && "(Modifies Outline)"}
             </Button>
+            {!gameData && (
+              <Button onClick={handleGenerateGame} disabled={isLoading || !narrativeOutline} className="w-full sm:w-auto">
+                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
+                {USE_MOCK_GENERATION ? "Weave Mock RPG!" : "Weave Your RPG!"}
+              </Button>
+            )}
+            {gameData && (
+              <>
+                <Button onClick={handleSaveAdventureClick} variant={isCurrentAdventureSaved ? "secondary" : "default"} className="w-full sm:w-auto" disabled={isLoading}>
+                  {isCurrentAdventureSaved ? <CheckCircle className="mr-2 h-4 w-4" /> : <Save className="mr-2 h-4 w-4" />}
+                  {isCurrentAdventureSaved ? "Saved to Library" : "Save to Library"}
+                  {/* Future: Add hint for plan limits */}
+                </Button>
+                <Button onClick={handlePlayNowClick} className="w-full sm:w-auto bg-primary hover:bg-primary/90" disabled={isLoading}>
+                  <Play className="mr-2 h-4 w-4" /> Play Now
+                </Button>
+              </>
+            )}
           </CardFooter>
         </Card>
       )}
