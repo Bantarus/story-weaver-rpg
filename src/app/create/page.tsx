@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, BookText, UserPlus, Wand2, AlertCircle, CheckCircle, Play, Palette, Scale, Sparkles } from "lucide-react";
+import { Loader2, BookText, UserPlus, Wand2, AlertCircle, CheckCircle, Play, Palette, Scale, Sparkles, RefreshCcw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 import { analyzeSourceMaterial } from "@/ai/flows/analyze-source-material";
@@ -21,7 +21,7 @@ import { formatGameDataJson, type FormatGameDataJsonOutput, type AISceneNode } f
 import { mockGameData } from "@/lib/mock-game-data"; 
 
 // --- DEVELOPMENT FLAG ---
-const USE_MOCK_GENERATION = false; 
+const USE_MOCK_GENERATION = true; 
 // ------------------------
 
 const toneOptions: DesiredTone[] = ["Default", "Heroic", "Mysterious", "Comedic", "Tragic", "Dramatic"];
@@ -164,7 +164,6 @@ export default function CreatePage() {
       toast({ title: "Narrative Outline Generated", description: "Ready to generate the full game data.", className: "bg-primary text-primary-foreground" });
       setCreationStep("generate");
     } catch (err) {
-      console.error("Error generating narrative outline:", err);
       const errorMessage = err instanceof Error ? err.message : "An unknown error occurred during outline generation.";
       setError(errorMessage);
       setCreationStep('error');
@@ -195,7 +194,7 @@ export default function CreatePage() {
       if (!aiFormattedGameData || !aiFormattedGameData.scenes || !aiFormattedGameData.startSceneId || aiFormattedGameData.scenes.length === 0) {
         throw new Error("Received incomplete or invalid game data structure from AI.");
       }
-
+      
       const scenesRecord: Record<string, SceneNode> = {};
       aiFormattedGameData.scenes.forEach((aiScene: AISceneNode) => {
         scenesRecord[aiScene.id] = {
@@ -237,18 +236,31 @@ export default function CreatePage() {
       let errorMessage = "An unknown error occurred during game generation.";
       if (err instanceof Error) {
         errorMessage = err.message;
-        if (err.message.includes("Schema validation failed")) {
-            errorMessage = `AI data structure error. Please check the console for details and try modifying your inputs or story. Raw message: ${err.message}`;
+        if (err.message.includes("Schema validation failed") || err.message.includes("AI output was not valid JSON")) {
+            errorMessage = `AI data structure error: ${err.message}. Please check console for details. You might want to try modifying your inputs or story.`;
         }
       }
       setError(errorMessage);
-      setCreationStep('error');
+      setCreationStep('error'); // Keep user on current step or 'generate' if error occurs here
       toast({ variant: "destructive", title: "Game Generation Failed", description: errorMessage, duration: 7000 });
     } finally {
       setIsLoading(false);
     }
   };
   
+  const handleTryAgainOnError = () => {
+    setError(null);
+    // Attempt to go back to the previous logical step based on where the error might have occurred.
+    // This is a simple heuristic. A more robust solution might store the last successful step.
+    if (narrativeOutline) { // If outline exists, error likely in final generation
+        setCreationStep('generate');
+    } else if (analysisResult) { // If analysis exists, error likely in outline generation
+        setCreationStep('character');
+    } else { // Otherwise, error likely in story analysis
+        setCreationStep('story');
+    }
+  };
+
   return (
     <div className="max-w-2xl mx-auto space-y-8">
       <h2 className="text-3xl font-bold text-center text-primary">Create Your RPG Adventure</h2>
@@ -265,13 +277,20 @@ export default function CreatePage() {
       {error && creationStep === 'error' && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Error</AlertTitle>
+          <AlertTitle>Error Encountered</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
-          <Button onClick={() => { setError(null); setCreationStep('story');}} variant="outline" className="mt-2">Start Over</Button>
+          <div className="mt-4 flex gap-2">
+            <Button onClick={handleTryAgainOnError} variant="outline" className="w-full">
+                <RefreshCcw className="mr-2 h-4 w-4" /> Try Again from Previous Step
+            </Button>
+            <Button onClick={() => { resetCreationProgress(); setCreationStep('story');}} variant="destructive" className="w-full">
+                Start Over
+            </Button>
+          </div>
         </Alert>
       )}
 
-      {creationStep === "story" && (
+      {creationStep === "story" && !error &&(
         <Card className="shadow-lg">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-2xl"><BookText /> Step 1: Provide Your Story</CardTitle>
@@ -298,7 +317,7 @@ export default function CreatePage() {
         </Card>
       )}
 
-      {creationStep === "character" && (
+      {creationStep === "character" && !error && (
         <Card className="shadow-lg">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-2xl"><UserPlus /> Step 2: Define Your Character</CardTitle>
@@ -381,7 +400,7 @@ export default function CreatePage() {
         </Card>
       )}
       
-      {creationStep === "generate" && narrativeOutline && (
+      {creationStep === "generate" && narrativeOutline && !error && (
         <Card className="shadow-lg">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-2xl"><CheckCircle className="text-green-500" /> Step 3: Weave Your RPG</CardTitle>
