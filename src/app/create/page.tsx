@@ -20,7 +20,7 @@ import { formatGameDataJson, type FormatGameDataJsonOutput } from "@/ai/flows/fo
 import { mockGameData } from "@/lib/mock-game-data"; 
 
 // --- DEVELOPMENT FLAG ---
-const USE_MOCK_GENERATION = true; 
+const USE_MOCK_GENERATION = false; 
 // ------------------------
 
 export default function CreatePage() {
@@ -314,3 +314,5 @@ export default function CreatePage() {
     </div>
   );
 }
+
+    
