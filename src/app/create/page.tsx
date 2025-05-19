@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useGame, type GameData, type SceneNode, type DesiredTone, type DesiredLength } from "@/context/GameContext"; 
 import { Button } from "@/components/ui/button";
@@ -228,7 +228,6 @@ export default function CreatePage() {
       }
       
       setGameData(finalGameDataToSet);
-      // setCreationStep("generate") is already the current step.
 
     } catch (err) {
       console.error("Error formatting/generating game data:", err);
@@ -247,28 +246,31 @@ export default function CreatePage() {
     }
   };
 
-  const handleSaveAdventureClick = () => {
+  const handleSaveAdventureClick = useCallback(() => {
     if (!gameData) {
       toast({ variant: "destructive", title: "Cannot Save", description: "No game data available to save." });
       return;
     }
-    // Ensure defaultName is always a non-empty string for the prompt
-    const defaultName = gameData.adventureName || gameData.title || "My Awesome Adventure";
-    const adventureName = window.prompt("Enter a name for your adventure:", defaultName);
 
-    if (adventureName && adventureName.trim() !== "") { // Check if a non-empty name was provided
-      if (saveAdventureToLibrary(adventureName.trim())) {
-        toast({ title: "Adventure Saved!", description: `"${adventureName.trim()}" has been saved to your library.`, className: "bg-primary text-primary-foreground" });
-      } else {
-        // This case should be rare if gameData exists, but good to have
-        toast({ variant: "destructive", title: "Save Failed", description: "Could not save the adventure. Ensure game data is present." });
+    // Defer the prompt slightly.
+    setTimeout(() => {
+      const defaultName = gameData.adventureName || gameData.title || "My Awesome Adventure";
+      const adventureName = window.prompt("Enter a name for your adventure:", defaultName);
+
+      if (adventureName && adventureName.trim() !== "") {
+        if (saveAdventureToLibrary(adventureName.trim())) {
+          toast({ title: "Adventure Saved!", description: `"${adventureName.trim()}" has been saved to your library.`, className: "bg-primary text-primary-foreground" });
+        } else {
+          toast({ variant: "destructive", title: "Save Failed", description: "Could not save the adventure. Ensure game data is present." });
+        }
+      } else if (adventureName === "") { // User clicked OK but left the name blank
+          toast({ variant: "destructive", title: "Save Cancelled", description: "Adventure name cannot be empty." });
+      } else if (adventureName === null) { // User clicked Cancel (prompt returned null)
+        toast({ title: "Save Cancelled", description: "Adventure was not saved." });
       }
-    } else if (adventureName === "") { // User clicked OK but left the name blank
-        toast({ variant: "destructive", title: "Save Cancelled", description: "Adventure name cannot be empty." });
-    } else { // User clicked Cancel (prompt returned null)
-      toast({ title: "Save Cancelled", description: "Adventure was not saved." });
-    }
-  };
+      // No explicit toast if adventureName is undefined, though window.prompt shouldn't return undefined.
+    }, 0);
+  }, [gameData, saveAdventureToLibrary, toast]);
   
   const handlePlayNowClick = () => {
     if (!gameData) {
@@ -508,3 +510,4 @@ export default function CreatePage() {
 }
 
       
+
