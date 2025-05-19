@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useGame, type GameData, type SceneNode } from "@/context/GameContext"; 
+import { useGame, type GameData, type SceneNode, type DesiredTone, type DesiredLength } from "@/context/GameContext"; 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -11,7 +11,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Loader2, BookText, UserPlus, Wand2, AlertCircle, CheckCircle, Play } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Loader2, BookText, UserPlus, Wand2, AlertCircle, CheckCircle, Play, Palette, Scale, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 import { analyzeSourceMaterial } from "@/ai/flows/analyze-source-material";
@@ -23,6 +24,9 @@ import { mockGameData } from "@/lib/mock-game-data";
 const USE_MOCK_GENERATION = false; 
 // ------------------------
 
+const toneOptions: DesiredTone[] = ["Default", "Heroic", "Mysterious", "Comedic", "Tragic", "Dramatic"];
+const lengthOptions: DesiredLength[] = ["Default", "Short", "Medium", "Long"];
+
 export default function CreatePage() {
   const router = useRouter();
   const { toast } = useToast();
@@ -31,6 +35,9 @@ export default function CreatePage() {
     characterDescription, setCharacterDescription, 
     analysisResult, setAnalysisResult, 
     narrativeOutline, setNarrativeOutline,
+    desiredTone, setDesiredTone,
+    desiredLength, setDesiredLength,
+    keyThemes, setKeyThemes,
     setGameData,
     isLoading, setIsLoading,
     error, setError,
@@ -38,44 +45,43 @@ export default function CreatePage() {
     resetCreationProgress
   } = useGame();
 
-  // Local state for character form inputs, as these aren't directly in context until submitted
+  // Local state for character form inputs (name, archetype, background, goals)
   const [charName, setCharNameLocal] = useState(() => {
     const cd = characterDescription;
     if (!cd) return "";
-    const match = cd.match(/Name: (.*)/);
-    return match ? match[1] : "";
+    const match = cd.match(/Name: (.*?)(?:\nArchetype:|\nBackground:|\nGoals:|$)/s);
+    return match ? match[1].trim() : "";
   });
   const [charArchetype, setCharArchetypeLocal] = useState(() => {
     const cd = characterDescription;
     if (!cd) return "";
-    const match = cd.match(/Archetype: (.*)/);
-    return match ? match[1] : "";
+    const match = cd.match(/Archetype: (.*?)(?:\nBackground:|\nGoals:|$)/s);
+    return match ? match[1].trim() : "";
   });
   const [charBackground, setCharBackgroundLocal] = useState(() => {
     const cd = characterDescription;
     if (!cd) return "";
-    const match = cd.match(/Background: (.*)/);
-    return match ? match[1] : "";
+    const match = cd.match(/Background: (.*?)(?:\nGoals:|$)/s);
+    return match ? match[1].trim() : "";
   });
   const [charGoals, setCharGoalsLocal] = useState(() => {
     const cd = characterDescription;
     if (!cd) return "";
-    const match = cd.match(/Goals: (.*)/);
-    return match ? match[1] : "";
+    const match = cd.match(/Goals: (.*)/s);
+    return match ? match[1].trim() : "";
   });
 
   // Effect to re-populate local char fields if characterDescription changes in context
-  // (e.g. loaded from localStorage after initial render but before local state init finishes)
   useEffect(() => {
     if (characterDescription) {
-      const nameMatch = characterDescription.match(/Name: (.*)/);
-      if (nameMatch) setCharNameLocal(nameMatch[1]);
-      const archetypeMatch = characterDescription.match(/Archetype: (.*)/);
-      if (archetypeMatch) setCharArchetypeLocal(archetypeMatch[1]);
-      const backgroundMatch = characterDescription.match(/Background: (.*)/);
-      if (backgroundMatch) setCharBackgroundLocal(backgroundMatch[1]);
-      const goalsMatch = characterDescription.match(/Goals: (.*)/);
-      if (goalsMatch) setCharGoalsLocal(goalsMatch[1]);
+      const nameMatch = characterDescription.match(/Name: (.*?)(?:\nArchetype:|\nBackground:|\nGoals:|$)/s);
+      if (nameMatch) setCharNameLocal(nameMatch[1].trim());
+      const archetypeMatch = characterDescription.match(/Archetype: (.*?)(?:\nBackground:|\nGoals:|$)/s);
+      if (archetypeMatch) setCharArchetypeLocal(archetypeMatch[1].trim());
+      const backgroundMatch = characterDescription.match(/Background: (.*?)(?:\nGoals:|$)/s);
+      if (backgroundMatch) setCharBackgroundLocal(backgroundMatch[1].trim());
+      const goalsMatch = characterDescription.match(/Goals: (.*)/s);
+      if (goalsMatch) setCharGoalsLocal(goalsMatch[1].trim());
     }
   }, [characterDescription]);
 
@@ -101,7 +107,7 @@ export default function CreatePage() {
     }
     if (USE_MOCK_GENERATION) {
         setAnalysisResult({ plotPoints: "Mocked plot points.", characters: "Mocked characters.", settings: "Mocked settings.", themes: "Mocked themes.", tone: "Mocked tone."});
-        toast({ title: "Mock Story Analysis Complete", description: "Proceed to character creation (using mock data).", className: "bg-blue-500 text-white" });
+        toast({ title: "Mock Story Analysis Complete", description: "Proceed to character creation (using mock data).", className: "bg-primary text-primary-foreground" });
         setCreationStep("character");
         return;
     }
@@ -110,7 +116,7 @@ export default function CreatePage() {
     try {
       const result = await analyzeSourceMaterial({ storyText });
       setAnalysisResult(result);
-      toast({ title: "Story Analysis Complete", description: "Proceed to character creation.", className: "bg-green-500 text-white" });
+      toast({ title: "Story Analysis Complete", description: "Proceed to character creation.", className: "bg-primary text-primary-foreground" });
       setCreationStep("character");
     } catch (err) {
       console.error("Error analyzing source material:", err);
@@ -136,7 +142,7 @@ export default function CreatePage() {
 
     if (USE_MOCK_GENERATION) {
         setNarrativeOutline("This is a mocked narrative outline based on your character and the mocked story analysis. It sets the stage for an exciting adventure!");
-        toast({ title: "Mock Narrative Outline Generated", description: "Ready to generate the mock game data.", className: "bg-blue-500 text-white" });
+        toast({ title: "Mock Narrative Outline Generated", description: "Ready to generate the mock game data.", className: "bg-primary text-primary-foreground" });
         setCreationStep("generate");
         return;
     }
@@ -147,9 +153,15 @@ export default function CreatePage() {
       if (!storyText) {
         throw new Error("Story text not found. Please go back to the story step.");
       }
-      const result = await generateNarrativeOutline({ storyText, characterDescription: fullCharacterDescription });
+      const result = await generateNarrativeOutline({ 
+        storyText, 
+        characterDescription: fullCharacterDescription,
+        desiredTone: desiredTone === "Default" ? undefined : desiredTone,
+        desiredLength: desiredLength === "Default" ? undefined : desiredLength,
+        keyThemes: keyThemes || undefined,
+      });
       setNarrativeOutline(result.narrativeOutline);
-      toast({ title: "Narrative Outline Generated", description: "Ready to generate the full game data.", className: "bg-green-500 text-white" });
+      toast({ title: "Narrative Outline Generated", description: "Ready to generate the full game data.", className: "bg-primary text-primary-foreground" });
       setCreationStep("generate");
     } catch (err) {
       console.error("Error generating narrative outline:", err);
@@ -168,8 +180,8 @@ export default function CreatePage() {
     try {
       if (USE_MOCK_GENERATION) {
         setGameData(mockGameData as GameData); 
-        toast({ title: "Mock RPG Weaved!", description: "Your mock adventure is ready. Redirecting to game...", className: "bg-blue-500 text-white" });
-        resetCreationProgress(); // Clear creation inputs
+        toast({ title: "Mock RPG Weaved!", description: "Your mock adventure is ready. Redirecting to game...", className: "bg-primary text-primary-foreground" });
+        resetCreationProgress(); 
         router.push("/play");
         return;
       }
@@ -177,23 +189,20 @@ export default function CreatePage() {
       if (!narrativeOutline) { 
         throw new Error("Narrative outline not found. Please go back to the character step.");
       }
-      // aiFormattedGameData will have 'scenes' as an array of AISceneNode
+      
       const aiFormattedGameData: FormatGameDataJsonOutput = await formatGameDataJson({ narrativeOutline });
       
       if (!aiFormattedGameData || !aiFormattedGameData.scenes || !aiFormattedGameData.startSceneId || aiFormattedGameData.scenes.length === 0) {
         throw new Error("Received incomplete or invalid game data structure from AI.");
       }
 
-      // Transform scenes array to Record<string, SceneNode> for GameContext
       const scenesRecord: Record<string, SceneNode> = {};
       aiFormattedGameData.scenes.forEach((aiScene: AISceneNode) => {
-        // Map AISceneNode to SceneNode (application's internal type)
-        // Handle potential undefined fields from AI default empty strings
         scenesRecord[aiScene.id] = {
           id: aiScene.id,
           title: aiScene.title && aiScene.title.trim() !== "" ? aiScene.title.trim() : undefined,
           text: aiScene.text,
-          choices: aiScene.choices, // Assuming SceneChoice and AIChoice are compatible enough
+          choices: aiScene.choices, 
           isEnding: aiScene.isEnding,
           endingType: aiScene.endingType && aiScene.endingType.trim() !== "" && aiScene.endingType.trim().toLowerCase() !== "none" ? aiScene.endingType.trim() : undefined,
           visualHint: aiScene.visualHint && aiScene.visualHint.trim() !== "" ? aiScene.visualHint.trim() : undefined,
@@ -201,7 +210,6 @@ export default function CreatePage() {
         };
       });
       
-      // Ensure startSceneId is valid within the newly created scenesRecord
       let finalStartSceneId = aiFormattedGameData.startSceneId;
       if (!scenesRecord[finalStartSceneId]) {
         const availableSceneIds = Object.keys(scenesRecord);
@@ -220,8 +228,8 @@ export default function CreatePage() {
       };
       
       setGameData(finalGameData);
-      toast({ title: "RPG Weaved!", description: "Your adventure is ready. Redirecting to game...", className: "bg-green-500 text-white" });
-      resetCreationProgress(); // Clear creation inputs
+      toast({ title: "RPG Weaved!", description: "Your adventure is ready. Redirecting to game...", className: "bg-primary text-primary-foreground" });
+      resetCreationProgress(); 
       router.push("/play");
 
     } catch (err) {
@@ -229,10 +237,13 @@ export default function CreatePage() {
       let errorMessage = "An unknown error occurred during game generation.";
       if (err instanceof Error) {
         errorMessage = err.message;
+        if (err.message.includes("Schema validation failed")) {
+            errorMessage = `AI data structure error. Please check the console for details and try modifying your inputs or story. Raw message: ${err.message}`;
+        }
       }
       setError(errorMessage);
       setCreationStep('error');
-      toast({ variant: "destructive", title: "Game Generation Failed", description: errorMessage });
+      toast({ variant: "destructive", title: "Game Generation Failed", description: errorMessage, duration: 7000 });
     } finally {
       setIsLoading(false);
     }
@@ -244,7 +255,7 @@ export default function CreatePage() {
       <Progress value={progressValue} className="w-full" />
 
       {USE_MOCK_GENERATION && (
-         <Alert variant="default" className="bg-blue-50 border-blue-300 text-blue-700">
+         <Alert variant="default" className="bg-blue-100 border-blue-300 text-blue-700">
           <Play className="h-4 w-4 !text-blue-700" />
           <AlertTitle>Development Mode</AlertTitle>
           <AlertDescription>Using mocked data for faster development. AI calls are currently bypassed.</AlertDescription>
@@ -256,7 +267,7 @@ export default function CreatePage() {
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Error</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
-          <Button onClick={() => setCreationStep('story')} variant="outline" className="mt-2">Try Again</Button>
+          <Button onClick={() => { setError(null); setCreationStep('story');}} variant="outline" className="mt-2">Start Over</Button>
         </Alert>
       )}
 
@@ -291,7 +302,7 @@ export default function CreatePage() {
         <Card className="shadow-lg">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-2xl"><UserPlus /> Step 2: Define Your Character</CardTitle>
-            <CardDescription>Create your protagonist. Their background and goals will shape their journey within the story.</CardDescription>
+            <CardDescription>Create your protagonist. Their background, goals, and your preferences below will shape their journey.</CardDescription>
           </CardHeader>
           <form onSubmit={handleCharacterSubmit}>
             <CardContent className="space-y-4">
@@ -311,6 +322,53 @@ export default function CreatePage() {
                 <Label htmlFor="charGoals">Personal Goals</Label>
                 <Textarea id="charGoals" value={charGoals} onChange={(e) => setCharGoalsLocal(e.target.value)} placeholder="What does your character hope to achieve?" rows={3} disabled={isLoading} />
               </div>
+
+              <Card className="pt-4 bg-muted/30 border-dashed">
+                <CardHeader className="pt-0 pb-2">
+                  <CardTitle className="text-xl flex items-center gap-2"><Sparkles className="text-primary"/> Advanced Generation (Optional)</CardTitle>
+                  <CardDescription>Fine-tune the AI's narrative generation. (Future: May be tied to account plan)</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <Label htmlFor="desiredTone" className="flex items-center gap-1"><Palette size={16}/> Desired Tone</Label>
+                    <Select value={desiredTone} onValueChange={(value: DesiredTone) => setDesiredTone(value)} disabled={isLoading}>
+                      <SelectTrigger id="desiredTone">
+                        <SelectValue placeholder="Select tone" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {toneOptions.map(tone => (
+                          <SelectItem key={tone} value={tone}>{tone}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="desiredLength" className="flex items-center gap-1"><Scale size={16}/> Desired Length</Label>
+                    <Select value={desiredLength} onValueChange={(value: DesiredLength) => setDesiredLength(value)} disabled={isLoading}>
+                      <SelectTrigger id="desiredLength">
+                        <SelectValue placeholder="Select length" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {lengthOptions.map(len => (
+                          <SelectItem key={len} value={len}>{len}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="keyThemes">Key Themes to Emphasize</Label>
+                    <Textarea 
+                      id="keyThemes" 
+                      value={keyThemes || ""} 
+                      onChange={(e) => setKeyThemes(e.target.value)} 
+                      placeholder="e.g., Redemption, The struggle between good and evil, The importance of friendship" 
+                      rows={2} 
+                      disabled={isLoading} 
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
             </CardContent>
             <CardFooter className="flex justify-between">
               <Button variant="outline" onClick={() => setCreationStep("story")} disabled={isLoading}>Back to Story</Button>
@@ -352,3 +410,4 @@ export default function CreatePage() {
     </div>
   );
 }
+

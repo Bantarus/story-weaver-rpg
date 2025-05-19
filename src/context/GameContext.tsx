@@ -13,6 +13,10 @@ const GAME_DATA_KEY = 'storyWeaver_gameData';
 const CURRENT_SCENE_ID_KEY = 'storyWeaver_currentSceneId';
 const CREATION_STEP_KEY = 'storyWeaver_creationStep';
 const GAME_HISTORY_KEY = 'storyWeaver_gameHistory';
+const DESIRED_TONE_KEY = 'storyWeaver_desiredTone';
+const DESIRED_LENGTH_KEY = 'storyWeaver_desiredLength';
+const KEY_THEMES_KEY = 'storyWeaver_keyThemes';
+
 
 // Defines the structure of the game data JSON
 export interface GameData {
@@ -37,7 +41,9 @@ export interface SceneChoice {
   nextNodeId: string;
 }
 
-type CreationStep = 'story' | 'character' | 'generate' | 'error';
+export type CreationStep = 'story' | 'character' | 'generate' | 'error';
+export type DesiredTone = "Default" | "Heroic" | "Mysterious" | "Comedic" | "Tragic" | "Dramatic" | string; // Allow string for custom
+export type DesiredLength = "Default" | "Short" | "Medium" | "Long" | string;
 
 interface GameContextType {
   // Story and character data
@@ -49,6 +55,14 @@ interface GameContextType {
   setAnalysisResult: (result: any | null) => void;
   narrativeOutline: string | null;
   setNarrativeOutline: (outline: string | null) => void;
+
+  // Advanced Generation Parameters
+  desiredTone: DesiredTone;
+  setDesiredTone: (tone: DesiredTone) => void;
+  desiredLength: DesiredLength;
+  setDesiredLength: (length: DesiredLength) => void;
+  keyThemes: string | null;
+  setKeyThemes: (themes: string | null) => void;
 
   // Game data and state
   gameData: GameData | null;
@@ -78,6 +92,11 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
   const [characterDescription, setCharacterDescriptionState] = useState<string | null>(null);
   const [analysisResult, setAnalysisResultState] = useState<any | null>(null);
   const [narrativeOutline, setNarrativeOutlineState] = useState<string | null>(null);
+  
+  const [desiredTone, setDesiredToneState] = useState<DesiredTone>("Default");
+  const [desiredLength, setDesiredLengthState] = useState<DesiredLength>("Default");
+  const [keyThemes, setKeyThemesState] = useState<string | null>(null);
+
   const [gameData, setGameDataState] = useState<GameData | null>(null);
   const [currentSceneId, setCurrentSceneIdState] = useState<string | null>(null);
   const [gameHistory, setGameHistoryState] = useState<string[]>([]);
@@ -101,6 +120,15 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
     const storedOutline = localStorage.getItem(NARRATIVE_OUTLINE_KEY);
     if (storedOutline) setNarrativeOutlineState(storedOutline);
 
+    const storedDesiredTone = localStorage.getItem(DESIRED_TONE_KEY);
+    if (storedDesiredTone) setDesiredToneState(storedDesiredTone as DesiredTone);
+
+    const storedDesiredLength = localStorage.getItem(DESIRED_LENGTH_KEY);
+    if (storedDesiredLength) setDesiredLengthState(storedDesiredLength as DesiredLength);
+
+    const storedKeyThemes = localStorage.getItem(KEY_THEMES_KEY);
+    if (storedKeyThemes) setKeyThemesState(storedKeyThemes);
+
     const storedGameData = localStorage.getItem(GAME_DATA_KEY);
     if (storedGameData) setGameDataState(JSON.parse(storedGameData));
 
@@ -121,7 +149,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
     if (isLoaded && gameData && gameData.startSceneId) {
       if (currentSceneId === gameData.startSceneId && gameHistory.length === 0) {
         setGameHistoryState([gameData.startSceneId]);
-      } else if (gameHistory.length === 0 && (!currentSceneId || !gameData.scenes[currentSceneId])) { 
+      } else if (gameHistory.length === 0 && (!currentSceneId || (gameData.scenes && !gameData.scenes[currentSceneId]))) { 
          setGameHistoryState([gameData.startSceneId]);
          setCurrentSceneIdState(gameData.startSceneId);
       }
@@ -134,6 +162,9 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => { if (isLoaded) characterDescription ? localStorage.setItem(CHARACTER_DESC_KEY, characterDescription) : localStorage.removeItem(CHARACTER_DESC_KEY); }, [characterDescription, isLoaded]);
   useEffect(() => { if (isLoaded) analysisResult ? localStorage.setItem(ANALYSIS_RESULT_KEY, JSON.stringify(analysisResult)) : localStorage.removeItem(ANALYSIS_RESULT_KEY); }, [analysisResult, isLoaded]);
   useEffect(() => { if (isLoaded) narrativeOutline ? localStorage.setItem(NARRATIVE_OUTLINE_KEY, narrativeOutline) : localStorage.removeItem(NARRATIVE_OUTLINE_KEY); }, [narrativeOutline, isLoaded]);
+  useEffect(() => { if (isLoaded) desiredTone ? localStorage.setItem(DESIRED_TONE_KEY, desiredTone) : localStorage.removeItem(DESIRED_TONE_KEY); }, [desiredTone, isLoaded]);
+  useEffect(() => { if (isLoaded) desiredLength ? localStorage.setItem(DESIRED_LENGTH_KEY, desiredLength) : localStorage.removeItem(DESIRED_LENGTH_KEY); }, [desiredLength, isLoaded]);
+  useEffect(() => { if (isLoaded) keyThemes ? localStorage.setItem(KEY_THEMES_KEY, keyThemes) : localStorage.removeItem(KEY_THEMES_KEY); }, [keyThemes, isLoaded]);
   useEffect(() => { if (isLoaded) gameData ? localStorage.setItem(GAME_DATA_KEY, JSON.stringify(gameData)) : localStorage.removeItem(GAME_DATA_KEY); }, [gameData, isLoaded]);
   useEffect(() => { if (isLoaded) currentSceneId ? localStorage.setItem(CURRENT_SCENE_ID_KEY, currentSceneId) : localStorage.removeItem(CURRENT_SCENE_ID_KEY); }, [currentSceneId, isLoaded]);
   useEffect(() => { if (isLoaded) localStorage.setItem(CREATION_STEP_KEY, creationStep); }, [creationStep, isLoaded]);
@@ -145,6 +176,9 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
   const setCharacterDescription = useCallback((desc: string | null) => setCharacterDescriptionState(desc), []);
   const setAnalysisResult = useCallback((result: any | null) => setAnalysisResultState(result), []);
   const setNarrativeOutline = useCallback((outline: string | null) => setNarrativeOutlineState(outline), []);
+  const setDesiredTone = useCallback((tone: DesiredTone) => setDesiredToneState(tone), []);
+  const setDesiredLength = useCallback((length: DesiredLength) => setDesiredLengthState(length), []);
+  const setKeyThemes = useCallback((themes: string | null) => setKeyThemesState(themes), []);
   
   const setGameData = useCallback((data: GameData | null) => {
     setGameDataState(data);
@@ -185,11 +219,17 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
     setCharacterDescriptionState(null);
     setAnalysisResultState(null);
     setNarrativeOutlineState(null);
+    setDesiredToneState("Default");
+    setDesiredLengthState("Default");
+    setKeyThemesState(null);
     setCreationStepState('story');
     localStorage.removeItem(STORY_TEXT_KEY);
     localStorage.removeItem(CHARACTER_DESC_KEY);
     localStorage.removeItem(ANALYSIS_RESULT_KEY);
     localStorage.removeItem(NARRATIVE_OUTLINE_KEY);
+    localStorage.removeItem(DESIRED_TONE_KEY);
+    localStorage.removeItem(DESIRED_LENGTH_KEY);
+    localStorage.removeItem(KEY_THEMES_KEY);
     localStorage.setItem(CREATION_STEP_KEY, 'story'); 
     setErrorState(null); 
   }, []);
@@ -206,17 +246,14 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
   }, [resetCreationProgress]);
 
   const restartCurrentAdventure = useCallback(() => {
-    if (gameData && gameData.startSceneId && gameData.scenes[gameData.startSceneId]) {
+    if (gameData && gameData.startSceneId && gameData.scenes && gameData.scenes[gameData.startSceneId]) {
       setCurrentSceneIdState(gameData.startSceneId);
       setGameHistoryState([gameData.startSceneId]);
       setErrorState(null); // Clear any errors
-      // LocalStorage updates for currentSceneId and gameHistory are handled by their respective useEffect hooks.
     } else {
       console.warn("Cannot restart adventure: gameData, startSceneId, or start scene is missing/invalid.");
-      // Optionally, could redirect to /create or show an error to the user
-      // resetFullGame(); // Or, if something is critically wrong, reset everything
     }
-  }, [gameData]); // Depends on gameData to access startSceneId and validate scene
+  }, [gameData]); 
 
 
   if (!isLoaded) {
@@ -229,6 +266,9 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
       characterDescription, setCharacterDescription,
       analysisResult, setAnalysisResult,
       narrativeOutline, setNarrativeOutline,
+      desiredTone, setDesiredTone,
+      desiredLength, setDesiredLength,
+      keyThemes, setKeyThemes,
       gameData, setGameData, 
       currentSceneId, setCurrentSceneId,
       gameHistory,
