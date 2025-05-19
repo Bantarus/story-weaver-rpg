@@ -1,10 +1,11 @@
+
 'use server';
 /**
  * @fileOverview Formats a narrative outline into a detailed JSON object for the game engine.
  *
  * - formatGameDataJson - A function that formats the narrative outline into JSON.
  * - FormatGameDataJsonInput - The input type for the formatGameDataJson function.
- * - FormatGameDataJsonOutput - The return type for the formatGameDataJson function.
+ * - FormatGameDataJsonOutput - The return type for the formatGameDataJson function (which is GameData).
  */
 
 import {ai} from '@/ai/genkit';
@@ -13,18 +14,36 @@ import {z} from 'genkit';
 const FormatGameDataJsonInputSchema = z.object({
   narrativeOutline: z
     .string()
-    .describe('The narrative outline to be formatted into JSON.'),
+    .describe('The narrative outline to be formatted into structured game JSON data.'),
 });
 export type FormatGameDataJsonInput = z.infer<typeof FormatGameDataJsonInputSchema>;
 
-const FormatGameDataJsonOutputSchema = z.object({
-  gameDataJson: z
-    .string()
-    .describe(
-      'A JSON object containing game scenes, descriptive text, player choices, and scene transitions.'
-    ),
+const SceneChoiceSchema = z.object({
+  text: z.string().describe("The text presented to the player for this choice (e.g., 'Investigate the noise', 'Flee the scene')."),
+  nextNodeId: z.string().describe("The ID of the scene to transition to if this choice is selected. This ID must correspond to another scene's ID."),
+  // Optional: effects: z.array(z.string()).optional().describe("Any effects this choice has, e.g., 'gain_item_key', 'lose_trust_npc1'.")
 });
-export type FormatGameDataJsonOutput = z.infer<typeof FormatGameDataJsonOutputSchema>;
+
+const SceneNodeSchema = z.object({
+  id: z.string().describe("A unique identifier for this game scene (e.g., 'forest_clearing_01', 'village_entrance')."),
+  title: z.string().optional().describe("An optional title for this scene, displayed to the player (e.g., 'The Abandoned Shack')."),
+  text: z.string().describe("The main narrative text for this scene, describing the current situation, environment, or events. Use newline characters (\\n) for paragraph breaks."),
+  choices: z.array(SceneChoiceSchema).describe("A list of choices available to the player in this scene. If empty or not present, this scene might be an ending or a point where the story pauses."),
+  isEnding: z.boolean().optional().describe("Set to true if this scene represents a conclusion or significant ending point of the adventure or a branch."),
+  endingType: z.string().optional().describe("If isEnding is true, this field can describe the nature of the ending (e.g., 'victory', 'tragedy', 'cliffhanger', 'quest_complete')."),
+  visualHint: z.string().optional().describe("A brief description or keywords for a visual element that could accompany this scene (e.g., 'sun-dappled forest path', 'ominous castle silhouette', 'cozy tavern interior')."),
+  soundEffect: z.string().optional().describe("A suggestion for a sound effect that could be played during this scene (e.g., 'rustling leaves', 'distant bell tolling', 'crackling fireplace').")
+  // Optional: effects: z.array(z.string()).optional().describe("Any effects that occur upon entering this scene, e.g., 'weather_change_rain', 'music_tense'.")
+});
+
+// This is the actual structure the game will use, as defined in GameContext.tsx as GameData
+const GameDataSchema = z.object({
+  title: z.string().optional().describe("The overall title for the generated RPG adventure (e.g., 'The Shadow of the Forgotten King')."),
+  startSceneId: z.string().describe("The ID of the initial scene where the game begins. This ID must be a key in the 'scenes' object."),
+  scenes: z.record(SceneNodeSchema).describe("An object mapping unique scene IDs to their respective SceneNode data. Scene IDs should be descriptive (e.g., 'intro', 'village_square', 'dungeon_level_1_entrance')."),
+});
+
+export type FormatGameDataJsonOutput = z.infer<typeof GameDataSchema>;
 
 export async function formatGameDataJson(
   input: FormatGameDataJsonInput
@@ -35,24 +54,63 @@ export async function formatGameDataJson(
 const prompt = ai.definePrompt({
   name: 'formatGameDataJsonPrompt',
   input: {schema: FormatGameDataJsonInputSchema},
-  output: {schema: FormatGameDataJsonOutputSchema},
-  prompt: `You are an expert game designer who specializes in formatting narrative outlines into detailed JSON objects for RPG game engines.
+  output: {schema: GameDataSchema}, // Output is now the structured GameDataSchema
+  prompt: `You are an expert game designer specializing in creating interactive, text-based RPG adventures.
+Your task is to take a narrative outline and transform it into a structured JSON game dataset.
+The game should be a branching narrative where the player makes choices that lead to different scenes and outcomes.
 
-  The JSON object should contain game scenes, descriptive text, player choices, and scene transitions.
+Narrative Outline:
+{{{narrativeOutline}}}
 
-  Format the following narrative outline into a JSON object:
+Please generate a JSON object adhering to the following structure:
+- \`title\` (string, optional): An engaging title for the entire adventure.
+- \`startSceneId\` (string): The ID of the scene where the game should begin. This must be one of the keys in the \`scenes\` object.
+- \`scenes\` (object): A collection of all game scenes. Each key in this object is a unique \`sceneId\` (e.g., "scene_01", "forest_encounter", "castle_throne_room"). Each value is a SceneNode object with the following properties:
+  - \`id\` (string): The unique identifier for this scene (must match the key in the \`scenes\` object).
+  - \`title\` (string, optional): A short, descriptive title for the scene (e.g., "The Whispering Woods," "Confronting the Baron").
+  - \`text\` (string): The main descriptive text for the scene. This text should be engaging and set the stage for the player. Use newline characters (\\n) for paragraph breaks where appropriate.
+  - \`choices\` (array of SceneChoice objects): A list of actions the player can take.
+    - Each \`SceneChoice\` object has:
+      - \`text\` (string): The text displayed to the player for this choice (e.g., "Enter the dark cave," "Try to persuade the guard").
+      - \`nextNodeId\` (string): The \`id\` of the scene to transition to if this choice is selected. This ID must correspond to another scene in the \`scenes\` object.
+  - \`isEnding\` (boolean, optional): Set to \`true\` if this scene is a conclusion of the adventure or a major branch. If true, the \`choices\` array might be empty or lead to a final "Game Over" type message.
+  - \`endingType\` (string, optional): If \`isEnding\` is true, specify the nature of the ending (e.g., "victory", "heroic_sacrifice", "tragic_defeat", "mystery_unsolved", "peaceful_resolution").
+  - \`visualHint\` (string, optional): A brief phrase describing the visual mood or key elements of the scene (e.g., "moonlit clearing," "ancient library," "stormy clifftop").
+  - \`soundEffect\` (string, optional): A suggestion for a sound that might accompany the scene (e.g., "owl hooting," "pages turning," "wind howling").
 
-  {{{narrativeOutline}}}`,
+Ensure that:
+- All \`nextNodeId\` values in choices correctly point to existing \`id\`s within the \`scenes\` object.
+- There is at least one scene with \`isEnding: true\`.
+- The narrative flows logically based on the provided outline, creating a coherent and engaging player experience.
+- Scene IDs are descriptive and unique (e.g., "intro", "crossroads", "cave_entrance_01", "final_battle").
+- The story should branch and offer meaningful consequences for player choices.
+- Provide a variety of scenes and choices to make the game engaging.
+- Ensure the \`startSceneId\` refers to a valid scene ID defined in the \`scenes\` object.
+`,
 });
 
 const formatGameDataJsonFlow = ai.defineFlow(
   {
     name: 'formatGameDataJsonFlow',
     inputSchema: FormatGameDataJsonInputSchema,
-    outputSchema: FormatGameDataJsonOutputSchema,
+    outputSchema: GameDataSchema, // Output schema is GameDataSchema
   },
   async input => {
     const {output} = await prompt(input);
-    return output!;
+    if (!output) {
+      throw new Error('AI failed to generate game data.');
+    }
+    // Validate that startSceneId exists in scenes
+    if (output.scenes && !output.scenes[output.startSceneId]) {
+      const availableSceneIds = Object.keys(output.scenes);
+      if (availableSceneIds.length > 0) {
+        console.warn(`Generated startSceneId '${output.startSceneId}' not found in scenes. Defaulting to first available scene: ${availableSceneIds[0]}`);
+        output.startSceneId = availableSceneIds[0];
+      } else {
+        throw new Error('AI generated game data with no scenes or an invalid startSceneId.');
+      }
+    }
+    return output;
   }
 );
+

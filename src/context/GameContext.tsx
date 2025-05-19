@@ -18,11 +18,14 @@ export interface SceneNode {
   choices: SceneChoice[];
   visualHint?: string;
   soundEffect?: string;
+  isEnding?: boolean; // Added based on user workflow and AI schema
+  endingType?: string; // Added based on user workflow and AI schema
 }
 
 export interface SceneChoice {
   text: string;
   nextNodeId: string;
+  // effects?: string[]; // Future enhancement
 }
 
 interface GameContextType {
@@ -43,7 +46,7 @@ interface GameContextType {
   setIsLoading: (loading: boolean) => void;
   error: string | null;
   setError: (error: string | null) => void;
-  currentStep: 'story' | 'character' | 'generate' | 'error';
+  currentStep: 'story' | 'character' | 'generate' | 'error'; // currentStep on create page
   setCurrentStep: (step: 'story' | 'character' | 'generate' | 'error') => void;
 }
 

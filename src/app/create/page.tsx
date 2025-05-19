@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useGame } from "@/context/GameContext";
+import { useGame, type GameData } from "@/context/GameContext"; // Import GameData type
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,16 +16,16 @@ import { useToast } from "@/hooks/use-toast";
 
 import { analyzeSourceMaterial } from "@/ai/flows/analyze-source-material";
 import { generateNarrativeOutline } from "@/ai/flows/generate-narrative-outline";
-import { formatGameDataJson } from "@/ai/flows/format-game-data-json";
+import { formatGameDataJson, type FormatGameDataJsonOutput } from "@/ai/flows/format-game-data-json"; // Import output type
 
-type CreateStep = "story" | "character" | "generate" | "review";
+type CreateStep = "story" | "character" | "generate"; // Removed "review" as it's not implemented on this page
 
 export default function CreatePage() {
   const router = useRouter();
   const { toast } = useToast();
   const {
     storyText, setStoryText,
-    characterDescription, setCharacterDescription, // We'll build this from form fields
+    characterDescription, setCharacterDescription, 
     analysisResult, setAnalysisResult,
     narrativeOutline, setNarrativeOutline,
     setGameData,
@@ -43,11 +43,10 @@ export default function CreatePage() {
     story: 0,
     character: 33,
     generate: 66,
-    review: 100,
+    // review: 100, // review step not currently used
   }[currentLocalStep];
 
   useEffect(() => {
-    // Reset error on step change
     setError(null);
   }, [currentLocalStep, setError]);
 
@@ -83,12 +82,12 @@ export default function CreatePage() {
       return;
     }
     const fullCharacterDescription = `Name: ${charName}\nArchetype: ${charArchetype}\nBackground: ${charBackground}\nGoals: ${charGoals}`;
-    setCharacterDescription(fullCharacterDescription); // Store combined description in context
+    setCharacterDescription(fullCharacterDescription); 
 
     setIsLoading(true);
     setError(null);
     try {
-      if (!storyText) { // Should not happen if flow is correct
+      if (!storyText) {
         throw new Error("Story text not found.");
       }
       const result = await generateNarrativeOutline({ storyText, characterDescription: fullCharacterDescription });
@@ -109,20 +108,24 @@ export default function CreatePage() {
     setIsLoading(true);
     setError(null);
     try {
-      if (!narrativeOutline) { // Should not happen
+      if (!narrativeOutline) { 
         throw new Error("Narrative outline not found.");
       }
-      const result = await formatGameDataJson({ narrativeOutline });
-      const parsedGameData = JSON.parse(result.gameDataJson);
-      setGameData(parsedGameData);
+      // formatGameDataJson now returns a structured object (FormatGameDataJsonOutput which is GameData)
+      const gameDataResult: FormatGameDataJsonOutput = await formatGameDataJson({ narrativeOutline });
+      
+      // No JSON.parse needed as gameDataResult is already an object
+      if (!gameDataResult || !gameDataResult.scenes || !gameDataResult.startSceneId) {
+        throw new Error("Received incomplete or invalid game data from AI.");
+      }
+      
+      setGameData(gameDataResult as GameData); // Cast to GameData, should be compatible
       toast({ title: "RPG Weaved!", description: "Your adventure is ready. Redirecting to game...", className: "bg-green-500 text-white" });
       router.push("/play");
     } catch (err) {
-      console.error("Error formatting game data or parsing JSON:", err);
+      console.error("Error formatting game data:", err);
       let errorMessage = "An unknown error occurred during game generation.";
-      if (err instanceof SyntaxError) {
-        errorMessage = "Failed to parse the game data from AI. The format might be incorrect.";
-      } else if (err instanceof Error) {
+      if (err instanceof Error) {
         errorMessage = err.message;
       }
       setError(errorMessage);
