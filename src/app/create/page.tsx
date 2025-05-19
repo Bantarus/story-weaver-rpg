@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, BookText, UserPlus, Wand2, AlertCircle, CheckCircle, Play, Palette, Scale, Sparkles, RefreshCcw, Save, Library } from "lucide-react";
+import { Loader2, BookText, UserPlus, Wand2, AlertCircle, CheckCircle, Play, Palette, Scale, Sparkles, RefreshCcw, Save, LibraryBig } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 import { analyzeSourceMaterial } from "@/ai/flows/analyze-source-material";
@@ -20,9 +20,7 @@ import { generateNarrativeOutline } from "@/ai/flows/generate-narrative-outline"
 import { formatGameDataJson, type FormatGameDataJsonOutput, type AISceneNode } from "@/ai/flows/format-game-data-json";
 import { mockGameData } from "@/lib/mock-game-data";
 
-// --- DEVELOPMENT FLAG ---
 const USE_MOCK_GENERATION = true;
-// ------------------------
 
 const toneOptions: DesiredTone[] = ["Default", "Heroic", "Mysterious", "Comedic", "Tragic", "Dramatic"];
 const lengthOptions: DesiredLength[] = ["Default", "Short", "Medium", "Long"];
@@ -152,7 +150,10 @@ export default function CreatePage() {
     setError(null);
     try {
       if (!storyText) {
-        throw new Error("Story text not found. Please go back to the story step.");
+        setError("Story text not found. Please go back to the story step.");
+        setCreationStep('error');
+        toast({ variant: "destructive", title: "Error", description: "Story text not found." });
+        return;
       }
       const result = await generateNarrativeOutline({
         storyText,
@@ -181,11 +182,15 @@ export default function CreatePage() {
       let finalGameDataToSet: GameData | null = null;
 
       if (USE_MOCK_GENERATION) {
-        finalGameDataToSet = mockGameData as GameData;
+        finalGameDataToSet = mockGameData as GameData; 
         toast({ title: "Mock RPG Weaved!", description: "Your mock adventure is ready to play or save.", className: "bg-primary text-primary-foreground" });
       } else {
         if (!narrativeOutline) {
-          throw new Error("Narrative outline not found. Please go back to the character step.");
+          setError("Narrative outline not found. Please go back to the character step.");
+          setCreationStep('error');
+          toast({ variant: "destructive", title: "Error", description: "Narrative outline not found." });
+          setIsLoading(false);
+          return;
         }
 
         const aiFormattedOutput: FormatGameDataJsonOutput = await formatGameDataJson({ narrativeOutline });
@@ -200,12 +205,13 @@ export default function CreatePage() {
             id: aiScene.id,
             title: aiScene.title && aiScene.title.trim() !== "" ? aiScene.title.trim() : undefined,
             text: aiScene.text,
-            choices: aiScene.choices.map(choice => ({ // Ensure choice effects are mapped
+            choices: aiScene.choices.map(choice => ({
                 text: choice.text,
                 nextNodeId: choice.nextNodeId,
                 effects: choice.effects && choice.effects.length > 0 ? choice.effects : undefined,
+                alignmentEffect: typeof choice.alignmentEffect === 'number' ? choice.alignmentEffect : 0,
             })),
-            effects: aiScene.effects && aiScene.effects.length > 0 ? aiScene.effects : undefined, // Map scene effects
+            effects: aiScene.effects && aiScene.effects.length > 0 ? aiScene.effects : undefined,
             isEnding: aiScene.isEnding,
             endingType: aiScene.endingType && aiScene.endingType.trim() !== "" && aiScene.endingType.trim().toLowerCase() !== "none" ? aiScene.endingType.trim() : undefined,
             visualHint: aiScene.visualHint && aiScene.visualHint.trim() !== "" ? aiScene.visualHint.trim() : undefined,
@@ -285,13 +291,13 @@ export default function CreatePage() {
           toast({ variant: "destructive", title: "Save Failed", description: "Could not save the adventure. Game data might be missing (unexpected)." });
           console.error("handleSaveAdventureClick: saveAdventureToLibrary returned false.");
         }
-      } else if (adventureName === "") {
+      } else if (adventureName === "") { 
           toast({ variant: "destructive", title: "Save Cancelled", description: "Adventure name cannot be empty." });
           console.log("handleSaveAdventureClick: Save cancelled - adventureName was empty string.");
-      } else if (adventureName === null) {
+      } else if (adventureName === null) { 
         toast({ title: "Save Cancelled", description: "Adventure was not saved." });
         console.log("handleSaveAdventureClick: Save cancelled - adventureName was null.");
-      } else {
+      } else { 
         console.warn("handleSaveAdventureClick: Unexpected adventureName value after prompt:", adventureName);
         toast({ title: "Save Cancelled", description: "An unexpected issue occurred determining the adventure name." });
       }
@@ -305,7 +311,7 @@ export default function CreatePage() {
       setCreationStep('error');
       return;
     }
-    resetCreationProgress();
+    resetCreationProgress(); 
     router.push("/play");
   };
 
@@ -345,7 +351,7 @@ export default function CreatePage() {
             <Button onClick={handleTryAgainOnError} variant="outline" className="w-full">
                 <RefreshCcw className="mr-2 h-4 w-4" /> Try Again from Previous Step
             </Button>
-            <Button onClick={() => { resetCreationProgress(); setGameData(null); setCreationStep('story');}} variant="destructive" className="w-full">
+            <Button onClick={() => { setGameData(null); resetCreationProgress(); setCreationStep('story');}} variant="destructive" className="w-full">
                 Start Over
             </Button>
           </div>
@@ -371,7 +377,7 @@ export default function CreatePage() {
             </CardContent>
             <CardFooter>
               <Button type="submit" disabled={isLoading || !storyText || storyText.trim().length < 50} className="w-full">
-                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
+                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
                 {USE_MOCK_GENERATION ? "Use Mock Story & Analyze" : "Analyze Story"}
               </Button>
             </CardFooter>
@@ -533,5 +539,3 @@ export default function CreatePage() {
     </div>
   );
 }
-
-    

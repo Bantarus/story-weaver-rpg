@@ -3,7 +3,7 @@
 
 import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { useToast } from '@/hooks/use-toast'; // Import useToast
+import { useToast } from '@/hooks/use-toast';
 
 // LocalStorage Keys
 const STORY_TEXT_KEY = 'storyWeaver_storyText';
@@ -14,29 +14,28 @@ const DESIRED_TONE_KEY = 'storyWeaver_desiredTone';
 const DESIRED_LENGTH_KEY = 'storyWeaver_desiredLength';
 const KEY_THEMES_KEY = 'storyWeaver_keyThemes';
 
-const GAME_DATA_KEY = 'storyWeaver_gameData'; // For the currently active game
-const CURRENT_SCENE_ID_KEY = 'storyWeaver_currentSceneId'; // For the currently active game
+const GAME_DATA_KEY = 'storyWeaver_gameData';
+const CURRENT_SCENE_ID_KEY = 'storyWeaver_currentSceneId';
 const CREATION_STEP_KEY = 'storyWeaver_creationStep';
-const GAME_HISTORY_KEY = 'storyWeaver_gameHistory'; // For the currently active game
+const GAME_HISTORY_KEY = 'storyWeaver_gameHistory';
 const PLAYER_INVENTORY_KEY = 'storyWeaver_playerInventory';
 const PLAYER_STATUS_EFFECTS_KEY = 'storyWeaver_playerStatusEffects';
+const PLAYER_ALIGNMENT_KEY = 'storyWeaver_playerAlignment'; // New key
 
-
-const SAVED_ADVENTURES_KEY = 'storyWeaver_savedAdventures'; // For the library
+const SAVED_ADVENTURES_KEY = 'storyWeaver_savedAdventures';
 
 // Effect Definitions
 export type EffectType = "ADD_ITEM" | "REMOVE_ITEM" | "ADD_STATUS" | "REMOVE_STATUS";
 
 export interface Effect {
   type: EffectType;
-  value: string; // e.g., "rusty_key", "poisoned"
-  description?: string; // Player-facing message, e.g., "You found a Rusty Key!"
+  value: string;
+  description?: string;
 }
 
-// Defines the structure of the game data JSON
 export interface GameData {
-  id?: string; // Unique ID for library management, assigned when saved
-  adventureName?: string; // User-given name for the adventure, assigned when saved
+  id?: string;
+  adventureName?: string;
   title?: string;
   startSceneId: string;
   scenes: Record<string, SceneNode>;
@@ -47,7 +46,7 @@ export interface SceneNode {
   title?: string;
   text: string;
   choices: SceneChoice[];
-  effects?: Effect[]; // Effects that trigger when this scene loads
+  effects?: Effect[];
   visualHint?: string;
   soundEffect?: string;
   isEnding?: boolean;
@@ -57,7 +56,8 @@ export interface SceneNode {
 export interface SceneChoice {
   text: string;
   nextNodeId: string;
-  effects?: Effect[]; // Effects that trigger when this choice is selected
+  effects?: Effect[];
+  alignmentEffect?: number; // New field for alignment
 }
 
 export type CreationStep = 'story' | 'character' | 'generate' | 'error';
@@ -65,7 +65,6 @@ export type DesiredTone = "Default" | "Heroic" | "Mysterious" | "Comedic" | "Tra
 export type DesiredLength = "Default" | "Short" | "Medium" | "Long" | string;
 
 interface GameContextType {
-  // Story and character data (for creation)
   storyText: string | null;
   setStoryText: (text: string | null) => void;
   characterDescription: string | null;
@@ -75,7 +74,6 @@ interface GameContextType {
   narrativeOutline: string | null;
   setNarrativeOutline: (outline: string | null) => void;
 
-  // Advanced Generation Parameters
   desiredTone: DesiredTone;
   setDesiredTone: (tone: DesiredTone) => void;
   desiredLength: DesiredLength;
@@ -83,19 +81,18 @@ interface GameContextType {
   keyThemes: string | null;
   setKeyThemes: (themes: string | null) => void;
 
-  // Active game data and state
-  gameData: GameData | null; // This is the currently active/loaded game
+  gameData: GameData | null;
   setGameData: (data: GameData | null) => void;
   currentSceneId: string | null;
   setCurrentSceneId: (id: string | null) => void;
   gameHistory: string[];
 
-  // Player State
   playerInventory: string[];
   playerStatusEffects: string[];
+  playerAlignment: number; // New state for alignment
   applyEffects: (effectsToApply?: Effect[]) => void;
+  applyAlignmentShift: (shift?: number) => void; // New function
 
-  // UI State
   isLoading: boolean;
   setIsLoading: (loading: boolean) => void;
   error: string | null;
@@ -103,25 +100,22 @@ interface GameContextType {
   creationStep: CreationStep;
   setCreationStep: (step: CreationStep) => void;
 
-  // Library State & Functions
   savedAdventures: GameData[];
-  saveAdventureToLibrary: (name: string) => boolean; // Returns true on success
-  loadAdventureFromLibrary: (adventureId: string) => boolean; // Returns true on success
+  saveAdventureToLibrary: (name: string) => boolean;
+  loadAdventureFromLibrary: (adventureId: string) => boolean;
   deleteAdventureFromLibrary: (adventureId: string) => void;
   isAdventureInLibrary: (adventureId?: string) => boolean;
 
-  // Persistence functions
   resetCreationProgress: () => void;
-  resetFullGame: () => void; // Resets active game & creation, not library
+  resetFullGame: () => void;
   restartCurrentAdventure: () => void;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
 
 export const GameProvider = ({ children }: { children: ReactNode }) => {
-  const { toast } = useToast(); // Initialize useToast
+  const { toast } = useToast();
 
-  // Creation states
   const [storyText, setStoryTextState] = useState<string | null>(null);
   const [characterDescription, setCharacterDescriptionState] = useState<string | null>(null);
   const [analysisResult, setAnalysisResultState] = useState<any | null>(null);
@@ -131,24 +125,20 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
   const [keyThemes, setKeyThemesState] = useState<string | null>(null);
   const [creationStep, setCreationStepState] = useState<CreationStep>('story');
 
-  // Active game states
   const [gameData, setGameDataState] = useState<GameData | null>(null);
   const [currentSceneId, setCurrentSceneIdState] = useState<string | null>(null);
   const [gameHistory, setGameHistoryState] = useState<string[]>([]);
 
-  // Player states
   const [playerInventory, setPlayerInventoryState] = useState<string[]>([]);
   const [playerStatusEffects, setPlayerStatusEffectsState] = useState<string[]>([]);
+  const [playerAlignment, setPlayerAlignmentState] = useState<number>(0); // Initialized to 0
 
-  // UI states
   const [isLoading, setIsLoadingState] = useState(false);
   const [error, setErrorState] = useState<string | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // Library state
   const [savedAdventures, setSavedAdventuresState] = useState<GameData[]>([]);
 
-  // Load state from localStorage on initial mount
   useEffect(() => {
     const storedStoryText = localStorage.getItem(STORY_TEXT_KEY);
     if (storedStoryText) setStoryTextState(storedStoryText);
@@ -178,6 +168,9 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
     if (storedPlayerInventory) setPlayerInventoryState(JSON.parse(storedPlayerInventory));
     const storedPlayerStatusEffects = localStorage.getItem(PLAYER_STATUS_EFFECTS_KEY);
     if (storedPlayerStatusEffects) setPlayerStatusEffectsState(JSON.parse(storedPlayerStatusEffects));
+    const storedPlayerAlignment = localStorage.getItem(PLAYER_ALIGNMENT_KEY); // Load alignment
+    if (storedPlayerAlignment) setPlayerAlignmentState(JSON.parse(storedPlayerAlignment));
+
 
     const storedSavedAdventures = localStorage.getItem(SAVED_ADVENTURES_KEY);
     if (storedSavedAdventures) setSavedAdventuresState(JSON.parse(storedSavedAdventures));
@@ -185,20 +178,17 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
     setIsLoaded(true);
   }, []);
 
-  // Initialize history for active game
   useEffect(() => {
     if (isLoaded && gameData && gameData.startSceneId) {
       if (currentSceneId === gameData.startSceneId && gameHistory.length === 0) {
         setGameHistoryState([gameData.startSceneId]);
-      } else if (gameHistory.length === 0 && (!currentSceneId || (gameData.scenes && !gameData.scenes[currentSceneId]))) {
+      } else if (gameHistory.length === 0 && (!currentSceneId || (gameData.scenes && !gameData.scenes[currentSceneId!]))) {
          setGameHistoryState([gameData.startSceneId]);
          setCurrentSceneIdState(gameData.startSceneId);
       }
     }
   }, [gameData, currentSceneId, gameHistory.length, isLoaded]);
 
-
-  // Save active game states to localStorage
   useEffect(() => { if (isLoaded) storyText ? localStorage.setItem(STORY_TEXT_KEY, storyText) : localStorage.removeItem(STORY_TEXT_KEY); }, [storyText, isLoaded]);
   useEffect(() => { if (isLoaded) characterDescription ? localStorage.setItem(CHARACTER_DESC_KEY, characterDescription) : localStorage.removeItem(CHARACTER_DESC_KEY); }, [characterDescription, isLoaded]);
   useEffect(() => { if (isLoaded) analysisResult ? localStorage.setItem(ANALYSIS_RESULT_KEY, JSON.stringify(analysisResult)) : localStorage.removeItem(ANALYSIS_RESULT_KEY); }, [analysisResult, isLoaded]);
@@ -214,11 +204,10 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => { if (isLoaded) playerInventory.length > 0 ? localStorage.setItem(PLAYER_INVENTORY_KEY, JSON.stringify(playerInventory)) : localStorage.removeItem(PLAYER_INVENTORY_KEY); }, [playerInventory, isLoaded]);
   useEffect(() => { if (isLoaded) playerStatusEffects.length > 0 ? localStorage.setItem(PLAYER_STATUS_EFFECTS_KEY, JSON.stringify(playerStatusEffects)) : localStorage.removeItem(PLAYER_STATUS_EFFECTS_KEY); }, [playerStatusEffects, isLoaded]);
+  useEffect(() => { if (isLoaded) localStorage.setItem(PLAYER_ALIGNMENT_KEY, JSON.stringify(playerAlignment)); }, [playerAlignment, isLoaded]); // Save alignment
 
-  // Save saved adventures library to localStorage
   useEffect(() => { if (isLoaded) localStorage.setItem(SAVED_ADVENTURES_KEY, JSON.stringify(savedAdventures)); }, [savedAdventures, isLoaded]);
 
-  // Wrapped and memoized setters for creation and active game
   const setStoryText = useCallback((text: string | null) => setStoryTextState(text), []);
   const setCharacterDescription = useCallback((desc: string | null) => setCharacterDescriptionState(desc), []);
   const setAnalysisResult = useCallback((result: any | null) => setAnalysisResultState(result), []);
@@ -234,20 +223,18 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
         if (prevHistory.length === 0 && gameData && id === gameData.startSceneId) {
           return [id];
         }
-        // Only add to history if it's a new scene ID and the scene exists
         if (prevHistory.length > 0 && prevHistory[prevHistory.length - 1] !== id && gameData && gameData.scenes[id]) {
             return [...prevHistory, id];
         }
         return prevHistory;
       });
     }
-  }, [gameData]); // Depends on gameData to validate scene IDs
+  }, [gameData]);
 
   const setCreationStep = useCallback((step: CreationStep) => setCreationStepState(step), []);
   const setIsLoading = useCallback((loading: boolean) => setIsLoadingState(loading), []);
   const setError = useCallback((error: string | null) => setErrorState(error), []);
 
-  // Effect application logic
   const addItemToInventory = useCallback((itemValue: string) => {
     setPlayerInventoryState(prev => prev.includes(itemValue) ? prev : [...prev, itemValue]);
   }, []);
@@ -288,8 +275,17 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
     });
   }, [addItemToInventory, removeItemFromInventory, addPlayerStatus, removePlayerStatus, toast]);
 
+  const applyAlignmentShift = useCallback((shift?: number) => {
+    if (typeof shift === 'number' && shift !== 0) {
+      setPlayerAlignmentState(prev => {
+        const newAlignment = prev + shift;
+        toast({ title: "Alignment Shift", description: `Your alignment shifted by ${shift}. New alignment: ${newAlignment}` });
+        return newAlignment;
+      });
+    }
+  }, [toast]);
 
-  // Persistence control functions
+
   const resetCreationProgress = useCallback(() => {
     setStoryTextState(null);
     setCharacterDescriptionState(null);
@@ -315,32 +311,35 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
     setGameHistoryState([]);
     setPlayerInventoryState([]);
     setPlayerStatusEffectsState([]);
+    setPlayerAlignmentState(0); // Reset alignment
     setCreationStepState('story');
     localStorage.removeItem(GAME_DATA_KEY);
     localStorage.removeItem(CURRENT_SCENE_ID_KEY);
     localStorage.removeItem(GAME_HISTORY_KEY);
     localStorage.removeItem(PLAYER_INVENTORY_KEY);
     localStorage.removeItem(PLAYER_STATUS_EFFECTS_KEY);
+    localStorage.removeItem(PLAYER_ALIGNMENT_KEY); // Remove alignment
     localStorage.setItem(CREATION_STEP_KEY, 'story');
     setErrorState(null);
-  }, [resetCreationProgress]); // Depends on stable resetCreationProgress
+  }, [resetCreationProgress]);
 
   const setGameDataInternal = useCallback((data: GameData | null) => {
     setGameDataState(data);
     if (data && data.startSceneId) {
       setCurrentSceneIdState(data.startSceneId);
       setGameHistoryState([data.startSceneId]);
-      setPlayerInventoryState([]); // Reset inventory for new game
-      setPlayerStatusEffectsState([]); // Reset status for new game
-    } else if (!data) { // If gameData is cleared
+      setPlayerInventoryState([]);
+      setPlayerStatusEffectsState([]);
+      setPlayerAlignmentState(0); // Reset alignment
+    } else if (!data) {
       setCurrentSceneIdState(null);
       setGameHistoryState([]);
       setPlayerInventoryState([]);
       setPlayerStatusEffectsState([]);
+      setPlayerAlignmentState(0); // Reset alignment
     }
-  }, []); // Relies only on direct state setters
+  }, []);
 
-  // Library functions
   const saveAdventureToLibrary = useCallback((name: string): boolean => {
     if (!gameData) return false;
 
@@ -360,37 +359,34 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
         return [...prevAdventures, adventureToSave];
       }
     });
-    // Update active game data in context if it was a new save, so it now has an ID
     if (!gameData.id) {
         setGameDataState(adventureToSave);
     }
     return true;
-  }, [gameData]); // Depends on gameData state
+  }, [gameData]);
 
   const loadAdventureFromLibrary = useCallback((adventureId: string): boolean => {
     const adventureToLoad = savedAdventures.find(adv => adv.id === adventureId);
     if (adventureToLoad) {
-      setGameDataInternal(adventureToLoad); // This also resets history, inventory, status
-      resetCreationProgress(); // Clear any in-progress creation inputs
-      setCreationStepState('generate'); // Effectively "adventure loaded and ready"
+      setGameDataInternal(adventureToLoad);
+      resetCreationProgress();
+      setCreationStepState('generate');
       return true;
     }
     return false;
-  }, [savedAdventures, setGameDataInternal, resetCreationProgress]); // Depends on savedAdventures and other stable callbacks
+  }, [savedAdventures, setGameDataInternal, resetCreationProgress]);
 
   const deleteAdventureFromLibrary = useCallback((adventureId: string) => {
     setSavedAdventuresState(prevAdventures => prevAdventures.filter(adv => adv.id !== adventureId));
     if (gameData && gameData.id === adventureId) {
-        resetFullGame(); // Clear active game if it was the one deleted
+        resetFullGame();
     }
-  }, [gameData, resetFullGame]); // Depends on gameData and stable resetFullGame
-
+  }, [gameData, resetFullGame]);
 
   const isAdventureInLibrary = useCallback((adventureId?: string) => {
     if (!adventureId) return false;
     return savedAdventures.some(adv => adv.id === adventureId);
   }, [savedAdventures]);
-
 
   const restartCurrentAdventure = useCallback(() => {
     if (gameData && gameData.startSceneId && gameData.scenes && gameData.scenes[gameData.startSceneId]) {
@@ -398,12 +394,13 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
       setGameHistoryState([gameData.startSceneId]);
       setPlayerInventoryState([]);
       setPlayerStatusEffectsState([]);
+      setPlayerAlignmentState(0); // Reset alignment
       setErrorState(null);
     } else {
       console.warn("Cannot restart adventure: gameData, startSceneId, or start scene is missing/invalid.");
-      resetFullGame(); // Fallback to full reset if adventure data is broken
+      resetFullGame();
     }
-  }, [gameData, resetFullGame]); // Depends on gameData and stable resetFullGame
+  }, [gameData, resetFullGame]);
 
   if (!isLoaded) {
     return null;
@@ -425,7 +422,9 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
 
       playerInventory,
       playerStatusEffects,
+      playerAlignment, // Expose alignment
       applyEffects,
+      applyAlignmentShift, // Expose new function
 
       isLoading, setIsLoading,
       error, setError,
@@ -453,4 +452,3 @@ export const useGame = () => {
   }
   return context;
 };
-

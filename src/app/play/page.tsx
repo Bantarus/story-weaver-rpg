@@ -7,7 +7,7 @@ import { useGame, type SceneNode, type SceneChoice } from "@/context/GameContext
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Loader2, AlertCircle, ArrowLeft, Compass, Eye, Ear, RefreshCw, Briefcase, ShieldAlert, Sparkles } from "lucide-react";
+import { Loader2, AlertCircle, ArrowLeft, Compass, Eye, Ear, RefreshCw, Briefcase, ShieldAlert, Scale as ScaleIcon, Sparkles } from "lucide-react"; // Renamed Scale to ScaleIcon
 import { GameHistoryDisplay } from "@/components/GameHistoryDisplay"; 
 import { Badge } from "@/components/ui/badge";
 
@@ -19,7 +19,9 @@ export default function PlayPage() {
     gameHistory, 
     playerInventory,
     playerStatusEffects,
+    playerAlignment, 
     applyEffects,
+    applyAlignmentShift, 
     isLoading: contextIsLoading, 
     error: contextError,
     resetFullGame,
@@ -43,8 +45,6 @@ export default function PlayPage() {
       setShowText(false); 
       const newSceneToLoad = gameData.scenes[currentSceneId];
       
-      // Apply scene load effects FIRST before setting the scene
-      // This ensures any immediate changes (like status) are reflected when the scene renders
       if(newSceneToLoad.effects && newSceneToLoad.effects.length > 0) {
         applyEffects(newSceneToLoad.effects);
       }
@@ -68,9 +68,11 @@ export default function PlayPage() {
   }, [gameData, currentSceneId, setCurrentSceneId, resetFullGame, router, applyEffects]);
 
   const handleChoice = (choice: SceneChoice) => {
-    // Apply choice effects before navigating
     if(choice.effects && choice.effects.length > 0) {
       applyEffects(choice.effects);
+    }
+    if (typeof choice.alignmentEffect === 'number') { 
+      applyAlignmentShift(choice.alignmentEffect);
     }
 
     if (gameData && gameData.scenes[choice.nextNodeId]) {
@@ -140,6 +142,8 @@ export default function PlayPage() {
   }
 
   const isGameEnd = currentScene.isEnding || !currentScene.choices || currentScene.choices.length === 0;
+  const alignmentText = playerAlignment > 0 ? `Good (${playerAlignment})` : playerAlignment < 0 ? `Evil (${playerAlignment})` : `Neutral (${playerAlignment})`;
+
 
   return (
     <div className="max-w-3xl mx-auto space-y-8">
@@ -179,8 +183,8 @@ export default function PlayPage() {
         </CardContent>
       </Card>
 
-      {!isGameEnd && (playerInventory.length > 0 || playerStatusEffects.length > 0) && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {!isGameEnd && (playerInventory.length > 0 || playerStatusEffects.length > 0 || typeof playerAlignment === 'number') && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {playerInventory.length > 0 && (
             <Card className="shadow-md bg-card/70 backdrop-blur-sm">
               <CardHeader className="pb-2">
@@ -202,6 +206,18 @@ export default function PlayPage() {
                 {playerStatusEffects.map(status => (
                   <Badge key={status} variant={status === 'cursed' || status === 'poisoned' ? 'destructive' : 'outline'} className="text-sm">{status.replace(/_/g, ' ')}</Badge>
                 ))}
+              </CardContent>
+            </Card>
+          )}
+           {typeof playerAlignment === 'number' && (
+            <Card className="shadow-md bg-card/70 backdrop-blur-sm">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg flex items-center gap-2"><ScaleIcon size={20} /> Alignment</CardTitle>
+              </CardHeader>
+              <CardContent className="pt-2">
+                <p className={`text-md font-semibold text-center ${playerAlignment > 0 ? 'text-green-600' : playerAlignment < 0 ? 'text-red-600' : 'text-muted-foreground'}`}>
+                  {alignmentText}
+                </p>
               </CardContent>
             </Card>
           )}
@@ -262,6 +278,14 @@ export default function PlayPage() {
                 </div>
               </div>
             )}
+            {typeof playerAlignment === 'number' && (
+                 <div className="mt-3">
+                    <h4 className="font-semibold text-md mb-1">Final Alignment:</h4>
+                    <p className={`text-lg font-bold ${playerAlignment > 0 ? 'text-green-600' : playerAlignment < 0 ? 'text-red-600' : 'text-muted-foreground'}`}>
+                    {alignmentText}
+                    </p>
+                </div>
+            )}
 
             {gameData && gameData.scenes && gameHistory.length > 0 && (
               <GameHistoryDisplay 
@@ -291,5 +315,3 @@ export default function PlayPage() {
     </div>
   );
 }
-
-    

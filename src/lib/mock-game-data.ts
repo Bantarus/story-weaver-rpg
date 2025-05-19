@@ -18,9 +18,9 @@ export const mockGameData: GameData = {
       title: "A Mysterious Note",
       text: "You find a crumpled note on your doorstep. It reads: 'The Mockingbird knows the secret of the Whispering Willow. Seek it at dusk.'\nThe wind howls, carrying a faint, melodic tune.",
       choices: [
-        { text: "Investigate the Whispering Willow", nextNodeId: "willow_approach" },
-        { text: "Ignore the note and go about your day", nextNodeId: "ignore_note" },
-        { text: "Try to find who left the note", nextNodeId: "find_messenger", effects: [rustyKeyEvent] }
+        { text: "Investigate the Whispering Willow", nextNodeId: "willow_approach", alignmentEffect: 1 },
+        { text: "Ignore the note and go about your day", nextNodeId: "ignore_note", alignmentEffect: 0 },
+        { text: "Try to find who left the note", nextNodeId: "find_messenger", effects: [rustyKeyEvent], alignmentEffect: 0 }
       ],
       visualHint: "crumpled paper old doorstep twilight",
       soundEffect: "wind howling distant tune"
@@ -29,10 +29,10 @@ export const mockGameData: GameData = {
       id: "willow_approach",
       title: "The Whispering Willow",
       text: "You arrive at the ancient Whispering Willow as dusk settles. Its long branches sway, and you hear a soft, bird-like call from within its leaves. The air is thick with an old magic.",
-      effects: [cursedStatusEffect], // Scene load effect
+      effects: [cursedStatusEffect], 
       choices: [
-        { text: "Call out to the Mockingbird", nextNodeId: "call_mockingbird" },
-        { text: "Silently climb the tree", nextNodeId: "climb_willow" }
+        { text: "Call out to the Mockingbird", nextNodeId: "call_mockingbird", alignmentEffect: 1 },
+        { text: "Silently climb the tree", nextNodeId: "climb_willow", alignmentEffect: 0 }
       ],
       visualHint: "ancient tree dusk mysterious glow",
       soundEffect: "leaves rustling soft bird call"
@@ -52,8 +52,8 @@ export const mockGameData: GameData = {
       title: "Searching for Clues",
       text: "You look around for any sign of who might have left the note. You spot a small, colorful feather snagged on your door frame. It seems familiar...",
       choices: [
-        { text: "Take the feather and head to the Willow", nextNodeId: "willow_approach_feather", effects: [healPotionEffect] },
-        { text: "Dismiss it and go inside", nextNodeId: "ignore_note" }
+        { text: "Take the feather and head to the Willow", nextNodeId: "willow_approach_feather", effects: [healPotionEffect], alignmentEffect: 1 },
+        { text: "Dismiss it and go inside", nextNodeId: "ignore_note", alignmentEffect: -1 }
       ],
       visualHint: "colorful feather door frame detective",
       soundEffect: "footsteps nearby"
@@ -63,8 +63,8 @@ export const mockGameData: GameData = {
         title: "A Melodious Response",
         text: "You call out, 'Mockingbird, I seek your wisdom!' A beautiful bird with iridescent feathers flutters down to a low branch. It chirps, 'The secret lies not in the roots, but in the highest song.' It then flies off towards the old tower.",
         choices: [
-            { text: "Follow the bird to the old tower", nextNodeId: "tower_approach" },
-            { text: "Search the roots of the Willow anyway", nextNodeId: "search_roots_fail", effects: [losePotionEffect] }
+            { text: "Follow the bird to the old tower", nextNodeId: "tower_approach", alignmentEffect: 1 },
+            { text: "Search the roots of the Willow anyway", nextNodeId: "search_roots_fail", effects: [losePotionEffect], alignmentEffect: -1 }
         ],
         visualHint: "iridescent bird ancient tree magical",
         soundEffect: "bird song clear melody"
@@ -73,10 +73,10 @@ export const mockGameData: GameData = {
         id: "climb_willow",
         title: "A Perilous Ascent",
         text: "You begin to climb the gnarled branches of the Whispering Willow. It's a tricky climb. Halfway up, you find a small, intricately carved wooden bird. It feels warm to the touch.",
-        effects: [removeCurseEffect], // Scene load effect to remove curse
+        effects: [removeCurseEffect],
         choices: [
-            { text: "Continue climbing higher", nextNodeId: "willow_top" },
-            { text: "Take the wooden bird and climb down", nextNodeId: "wooden_bird_ending", effects: [{type: "ADD_ITEM", value: "wooden_bird_trinket", description: "You pocket the Wooden Bird Trinket."}] }
+            { text: "Continue climbing higher", nextNodeId: "willow_top", alignmentEffect: 0 },
+            { text: "Take the wooden bird and climb down", nextNodeId: "wooden_bird_ending", effects: [{type: "ADD_ITEM", value: "wooden_bird_trinket", description: "You pocket the Wooden Bird Trinket."}], alignmentEffect: 0 }
         ],
         visualHint: "climbing tree gnarled branches precarious",
         soundEffect: "straining wood heavy breathing"
@@ -86,8 +86,8 @@ export const mockGameData: GameData = {
       title: "To the Willow with a Token",
       text: "Clutching the feather, you make your way to the Whispering Willow. The feather hums faintly in your hand as you get closer. The tree seems to welcome you.",
       choices: [
-        { text: "Hold up the feather and speak to the tree", nextNodeId: "feather_speak_willow" },
-        { text: "Silently observe the tree", nextNodeId: "willow_approach" } 
+        { text: "Hold up the feather and speak to the tree", nextNodeId: "feather_speak_willow", alignmentEffect: 1 },
+        { text: "Silently observe the tree", nextNodeId: "willow_approach", alignmentEffect: 0 } 
       ],
       visualHint: "glowing feather ancient tree twilight",
       soundEffect: "humming sound rustling leaves"
@@ -97,8 +97,8 @@ export const mockGameData: GameData = {
         title: "The Silent Tower",
         text: "You arrive at the crumbling old tower. It stands silhouetted against the fading light. The Mockingbird is nowhere to be seen, but a faint light glows from a high window.",
         choices: [
-            { text: "Try to find a way into the tower", nextNodeId: "enter_tower" },
-            { text: "Decide it's too dangerous and leave", nextNodeId: "tower_leave_ending" }
+            { text: "Try to find a way into the tower", nextNodeId: "enter_tower", alignmentEffect: 0 },
+            { text: "Decide it's too dangerous and leave", nextNodeId: "tower_leave_ending", alignmentEffect: -1 }
         ],
         visualHint: "old tower crumbling stone faint light",
         soundEffect: "distant owl hoot wind through cracks"
@@ -137,10 +137,10 @@ export const mockGameData: GameData = {
         id: "feather_speak_willow",
         title: "The Willow's Welcome",
         text: "Holding the feather aloft, you speak to the Willow. The tree's leaves rustle in response, and a hidden path opens at its base, glowing faintly.",
-        effects: [blessedStatusEffect], // Scene load effect
+        effects: [blessedStatusEffect], 
         choices: [
-            { text: "Enter the hidden path", nextNodeId: "secret_path" },
-            { text: "Hesitate and observe further", nextNodeId: "willow_approach" }
+            { text: "Enter the hidden path", nextNodeId: "secret_path", alignmentEffect: 1 },
+            { text: "Hesitate and observe further", nextNodeId: "willow_approach", alignmentEffect: 0 }
         ],
         visualHint: "glowing path tree base magic feather",
         soundEffect: "deep rustle magical chime"
@@ -150,8 +150,8 @@ export const mockGameData: GameData = {
         title: "Inside the Tower",
         text: "You find a loose stone and manage to create an opening into the tower's base. Inside, it's dusty and filled with ancient tomes. A spiral staircase leads upwards towards the light.",
         choices: [
-            { text: "Ascend the staircase", nextNodeId: "tower_top_secret" },
-            { text: "Search the ground floor for lore", nextNodeId: "tower_lore" }
+            { text: "Ascend the staircase", nextNodeId: "tower_top_secret", alignmentEffect: 0 },
+            { text: "Search the ground floor for lore", nextNodeId: "tower_lore", alignmentEffect: 0 }
         ],
         visualHint: "dusty tower interior ancient books spiral staircase",
         soundEffect: "echoing footsteps crumbling stone"
@@ -191,8 +191,8 @@ export const mockGameData: GameData = {
         title: "Whispers of the Past",
         text: "You spend time poring over the books on the ground floor. You learn much about local history and forgotten legends, though the Mockingbird's specific secret remains elusive for now.",
         choices: [
-            { text: "Continue upwards", nextNodeId: "tower_top_secret" },
-            { text: "Leave with your newfound knowledge", nextNodeId: "lore_master_ending" }
+            { text: "Continue upwards", nextNodeId: "tower_top_secret", alignmentEffect: 0 },
+            { text: "Leave with your newfound knowledge", nextNodeId: "lore_master_ending", alignmentEffect: 0 }
         ],
         visualHint: "ancient library dusty books candlelight",
         soundEffect: "pages turning quiet contemplation"
@@ -209,5 +209,3 @@ export const mockGameData: GameData = {
     }
   }
 };
-
-    
