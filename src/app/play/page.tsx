@@ -7,9 +7,9 @@ import { useGame, type SceneNode, type SceneChoice } from "@/context/GameContext
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Loader2, AlertCircle, ArrowLeft, Compass, Eye, Ear, RefreshCw } from "lucide-react";
-import Link from "next/link";
+import { Loader2, AlertCircle, ArrowLeft, Compass, Eye, Ear, RefreshCw, Briefcase, ShieldAlert, Sparkles } from "lucide-react";
 import { GameHistoryDisplay } from "@/components/GameHistoryDisplay"; 
+import { Badge } from "@/components/ui/badge";
 
 export default function PlayPage() {
   const router = useRouter();
@@ -17,6 +17,9 @@ export default function PlayPage() {
     gameData, 
     currentSceneId, setCurrentSceneId,
     gameHistory, 
+    playerInventory,
+    playerStatusEffects,
+    applyEffects,
     isLoading: contextIsLoading, 
     error: contextError,
     resetFullGame,
@@ -38,33 +41,42 @@ export default function PlayPage() {
   useEffect(() => {
     if (gameData && currentSceneId && gameData.scenes[currentSceneId]) {
       setShowText(false); 
+      const newSceneToLoad = gameData.scenes[currentSceneId];
+      
+      // Apply scene load effects FIRST before setting the scene
+      // This ensures any immediate changes (like status) are reflected when the scene renders
+      if(newSceneToLoad.effects && newSceneToLoad.effects.length > 0) {
+        applyEffects(newSceneToLoad.effects);
+      }
+
       const timer = setTimeout(() => {
-        setCurrentScene(gameData.scenes[currentSceneId]);
+        setCurrentScene(newSceneToLoad);
         setShowText(true); 
       }, 50); 
       return () => clearTimeout(timer);
     } else if (gameData && currentSceneId && !gameData.scenes[currentSceneId]) {
       setCurrentScene(null); 
-      // Changed to string concatenation to avoid parsing error
       console.error('Scene with ID "' + currentSceneId + '" not found in game data. Resetting to start scene.');
-      // Attempt to restart or recover, if startSceneId is valid
       if (gameData.startSceneId && gameData.scenes[gameData.startSceneId]) {
         setCurrentSceneId(gameData.startSceneId);
       } else {
-        // If start scene itself is invalid, then it's a critical error
         console.error("Start scene is also invalid. Resetting full game.");
         resetFullGame();
         router.replace("/create");
       }
     }
-  }, [gameData, currentSceneId, setCurrentSceneId, resetFullGame, router]);
+  }, [gameData, currentSceneId, setCurrentSceneId, resetFullGame, router, applyEffects]);
 
   const handleChoice = (choice: SceneChoice) => {
+    // Apply choice effects before navigating
+    if(choice.effects && choice.effects.length > 0) {
+      applyEffects(choice.effects);
+    }
+
     if (gameData && gameData.scenes[choice.nextNodeId]) {
       setCurrentSceneId(choice.nextNodeId);
     } else {
       console.error('Next scene ID "' + choice.nextNodeId + '" not found. Staying in current scene or handling error.');
-      // Potentially set an error state to inform the user
     }
   };
 
@@ -127,7 +139,6 @@ export default function PlayPage() {
     );
   }
 
-
   const isGameEnd = currentScene.isEnding || !currentScene.choices || currentScene.choices.length === 0;
 
   return (
@@ -166,8 +177,37 @@ export default function PlayPage() {
             </div>
           )}
         </CardContent>
-        {/* Removed Restart button from here */}
       </Card>
+
+      {!isGameEnd && (playerInventory.length > 0 || playerStatusEffects.length > 0) && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {playerInventory.length > 0 && (
+            <Card className="shadow-md bg-card/70 backdrop-blur-sm">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg flex items-center gap-2"><Briefcase size={20} /> Inventory</CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-wrap gap-2 pt-2">
+                {playerInventory.map(item => (
+                  <Badge key={item} variant="secondary" className="text-sm">{item.replace(/_/g, ' ')}</Badge>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+          {playerStatusEffects.length > 0 && (
+             <Card className="shadow-md bg-card/70 backdrop-blur-sm">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg flex items-center gap-2"><ShieldAlert size={20} /> Status Effects</CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-wrap gap-2 pt-2">
+                {playerStatusEffects.map(status => (
+                  <Badge key={status} variant={status === 'cursed' || status === 'poisoned' ? 'destructive' : 'outline'} className="text-sm">{status.replace(/_/g, ' ')}</Badge>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
+
 
       {!isGameEnd && currentScene.choices && currentScene.choices.length > 0 && (
         <Card className="shadow-lg bg-card/80 backdrop-blur-sm">
@@ -202,6 +242,27 @@ export default function PlayPage() {
               {currentScene.endingType ? "Your journey has reached a conclusion." : "The story pauses here, its next chapter unwritten."}
             </p>
             
+            {playerInventory.length > 0 && (
+              <div className="mt-4">
+                <h4 className="font-semibold text-md mb-1">Final Inventory:</h4>
+                <div className="flex flex-wrap justify-center gap-2">
+                  {playerInventory.map(item => (
+                    <Badge key={item} variant="secondary">{item.replace(/_/g, ' ')}</Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+            {playerStatusEffects.length > 0 && (
+              <div className="mt-3">
+                <h4 className="font-semibold text-md mb-1">Final Status:</h4>
+                 <div className="flex flex-wrap justify-center gap-2">
+                  {playerStatusEffects.map(status => (
+                     <Badge key={status} variant={status === 'cursed' || status === 'poisoned' ? 'destructive' : 'outline'}>{status.replace(/_/g, ' ')}</Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {gameData && gameData.scenes && gameHistory.length > 0 && (
               <GameHistoryDisplay 
                 gameHistory={gameHistory} 
@@ -209,18 +270,18 @@ export default function PlayPage() {
                 currentSceneId={currentSceneId}
               />
             )}
-            <div className="flex justify-center items-center gap-4 mt-6">
+            <div className="flex flex-col sm:flex-row justify-center items-center gap-4 mt-6">
               <Button
                 variant="outline"
                 size="lg"
                 onClick={restartCurrentAdventure}
                 disabled={!gameData || !gameData.startSceneId}
-                className="shadow-md hover:shadow-lg"
+                className="shadow-md hover:shadow-lg w-full sm:w-auto"
               >
                 <RefreshCw className="mr-2 h-5 w-5" />
                 Restart Adventure
               </Button>
-              <Button variant="default" size="lg" className="shadow-md hover:shadow-lg" onClick={handleNewAdventure}>
+              <Button variant="default" size="lg" className="shadow-md hover:shadow-lg w-full sm:w-auto" onClick={handleNewAdventure}>
                 <ArrowLeft className="mr-2 h-5 w-5" /> Weave a New Adventure
               </Button>
             </div>
@@ -230,3 +291,5 @@ export default function PlayPage() {
     </div>
   );
 }
+
+    
