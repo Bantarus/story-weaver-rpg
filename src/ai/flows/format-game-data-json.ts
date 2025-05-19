@@ -56,7 +56,7 @@ export async function formatGameDataJson(
 const prompt = ai.definePrompt({
   name: 'formatGameDataJsonPrompt',
   input: {schema: FormatGameDataJsonInputSchema},
-  output: {schema: AIGameDataSchema}, 
+  // REMOVED: output: {schema: AIGameDataSchema}, // We will parse and validate manually
   prompt: `You are an expert game designer specializing in creating interactive, text-based RPG adventures.
 Your task is to take a narrative outline and transform it into a structured JSON game dataset.
 The game should be a branching narrative where the player makes choices that lead to different scenes and outcomes.
@@ -67,7 +67,7 @@ Narrative Outline:
 Please generate a JSON object adhering to the following structure. All string fields are required; if a feature is not applicable for a particular scene (e.g. title, visualHint, soundEffect, endingType), provide an empty string (""). For boolean fields like 'isEnding', provide true or false.
 - \`title\` (string): An engaging title for the entire adventure. Use an empty string if not applicable.
 - \`startSceneId\` (string): The ID of the scene where the game should begin. This must be the 'id' of one of the scenes in the \`scenes\` array.
-- \`scenes\` (array of SceneNode objects): A list of all game scenes. Each SceneNode object in this array must have the following properties:
+- \`scenes\` (ARRAY of SceneNode objects): A list of all game scenes. THIS MUST BE A JSON ARRAY, where each element is a SceneNode object. Each SceneNode object in this array must have the following properties:
   - \`id\` (string): A unique identifier for this scene (e.g., "scene_01", "forest_encounter").
   - \`title\` (string): A short, descriptive title for the scene. Use an empty string if not applicable.
   - \`text\` (string): The main descriptive text for the scene. Use newline characters (\\n) for paragraph breaks.
@@ -81,6 +81,7 @@ Please generate a JSON object adhering to the following structure. All string fi
   - \`soundEffect\` (string): A suggestion for a sound effect. Use an empty string if not applicable.
 
 Ensure that:
+- The 'scenes' field is a JSON array of SceneNode objects.
 - All \`nextNodeId\` values in choices correctly point to existing \`id\`s within the \`scenes\` array.
 - There is at least one scene with \`isEnding: true\`.
 - The narrative flows logically based on the provided outline.
@@ -93,27 +94,66 @@ const formatGameDataJsonFlow = ai.defineFlow(
   {
     name: 'formatGameDataJsonFlow',
     inputSchema: FormatGameDataJsonInputSchema,
-    outputSchema: AIGameDataSchema, // AI will output based on AISceneNodeSchema / AIGameDataSchema
+    outputSchema: AIGameDataSchema, // The flow's final output will be validated against this
   },
   async input => {
-    const {output: aiOutput} = await prompt(input);
-    if (!aiOutput) {
-      throw new Error('AI failed to generate game data.');
+    const llmResponse = await prompt(input); // Returns GenerateResponse
+    const aiOutputText = llmResponse.text;
+
+    if (!aiOutputText) {
+      throw new Error('AI failed to generate game data text.');
     }
+
+    let parsedJsonFromAI: any;
+    try {
+      parsedJsonFromAI = JSON.parse(aiOutputText);
+    } catch (e) {
+      console.error('AI output was not valid JSON:', aiOutputText);
+      throw new Error('AI output was not valid JSON: ' + (e instanceof Error ? e.message : String(e)));
+    }
+
+    let scenesArrayFromAI: any[];
+    if (parsedJsonFromAI.scenes && typeof parsedJsonFromAI.scenes === 'object' && !Array.isArray(parsedJsonFromAI.scenes)) {
+      // AI returned scenes as an object/map, convert to array
+      scenesArrayFromAI = Object.values(parsedJsonFromAI.scenes);
+    } else if (parsedJsonFromAI.scenes && Array.isArray(parsedJsonFromAI.scenes)) {
+      // AI returned scenes as an array, use as is
+      scenesArrayFromAI = parsedJsonFromAI.scenes;
+    } else {
+      console.error('AI output structure error. `scenes` field:', parsedJsonFromAI.scenes);
+      throw new Error('AI output did not contain a valid scenes structure (expected array or object).');
+    }
+    
+    // Construct an object that matches AIGameDataSchema for subsequent processing
+    // This `aiOutputForProcessing` will be used by the existing transformation logic
+    const aiOutputForProcessing = {
+      title: parsedJsonFromAI.title || "", // Ensure title exists
+      startSceneId: parsedJsonFromAI.startSceneId || "", // Ensure startSceneId exists
+      scenes: scenesArrayFromAI, // scenes is now guaranteed to be an array
+    };
+
+
+    // Validate the processed AI output before transforming it to GameData
+    // This ensures that what we pass to the transformation logic is what AIGameDataSchema expects
+    try {
+        AIGameDataSchema.parse(aiOutputForProcessing);
+    } catch (validationError) {
+        console.error("Transformed AI output does not match AIGameDataSchema:", validationError);
+        throw new Error("Internal error: Transformed AI output is not valid before final conversion.");
+    }
+
 
     // Transform AI output (with required fields and empty strings) to application's GameData structure (with optional fields)
     const scenesRecord: Record<string, SceneNode> = {};
-    if (aiOutput.scenes && Array.isArray(aiOutput.scenes)) {
-      aiOutput.scenes.forEach(aiScene => {
+    if (aiOutputForProcessing.scenes && Array.isArray(aiOutputForProcessing.scenes)) { // This check is now more of a safeguard
+      aiOutputForProcessing.scenes.forEach((aiScene: any) => { // aiScene should conform to AISceneNodeSchema
         if (aiScene.id) {
-          // Create a SceneNode conforming to GameContext type
           const appScene: SceneNode = {
             id: aiScene.id,
             text: aiScene.text,
-            choices: aiScene.choices, // choices schema is already compatible
-            // Convert empty strings/defaults back to undefined for optional fields
+            choices: aiScene.choices, 
             title: aiScene.title && aiScene.title.trim() !== "" ? aiScene.title.trim() : undefined,
-            isEnding: aiScene.isEnding, // boolean is fine
+            isEnding: aiScene.isEnding,
             endingType: aiScene.endingType && aiScene.endingType.trim() !== "" && aiScene.endingType.trim().toLowerCase() !== "none" ? aiScene.endingType.trim() : undefined,
             visualHint: aiScene.visualHint && aiScene.visualHint.trim() !== "" ? aiScene.visualHint.trim() : undefined,
             soundEffect: aiScene.soundEffect && aiScene.soundEffect.trim() !== "" ? aiScene.soundEffect.trim() : undefined,
@@ -124,23 +164,30 @@ const formatGameDataJsonFlow = ai.defineFlow(
         }
       });
     } else {
-      throw new Error('AI did not return a valid scenes array.');
+      // This path should ideally not be reached if pre-processing is correct
+      throw new Error('Error processing AI scenes: expected an array.');
     }
     
-    let finalStartSceneId = aiOutput.startSceneId;
+    let finalStartSceneId = aiOutputForProcessing.startSceneId;
 
-    if (!scenesRecord[finalStartSceneId]) {
+    if (!finalStartSceneId || !scenesRecord[finalStartSceneId]) {
       const availableSceneIds = Object.keys(scenesRecord);
       if (availableSceneIds.length > 0) {
-        console.warn(`Generated startSceneId '${finalStartSceneId}' not found in scenes. Defaulting to first available scene: ${availableSceneIds[0]}`);
+        console.warn(`Generated startSceneId '${finalStartSceneId}' not found or invalid. Defaulting to first available scene: ${availableSceneIds[0]}`);
         finalStartSceneId = availableSceneIds[0];
       } else {
+        // If no scenes at all, it's a critical failure.
         throw new Error('AI generated game data with no scenes or an invalid startSceneId after transformation.');
       }
     }
+     // Ensure startSceneId exists even if title is undefined
+    if(parsedJsonFromAI.title === undefined && finalStartSceneId === "") {
+        throw new Error('AI generated game data is critically incomplete (missing title and startSceneId).');
+    }
+
 
     const finalGameData: FormatGameDataJsonOutput = {
-      title: aiOutput.title && aiOutput.title.trim() !== "" ? aiOutput.title.trim() : undefined,
+      title: aiOutputForProcessing.title && aiOutputForProcessing.title.trim() !== "" ? aiOutputForProcessing.title.trim() : undefined,
       startSceneId: finalStartSceneId,
       scenes: scenesRecord,
     };
@@ -148,4 +195,3 @@ const formatGameDataJsonFlow = ai.defineFlow(
     return finalGameData;
   }
 );
-
