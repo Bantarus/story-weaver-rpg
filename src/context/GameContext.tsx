@@ -68,6 +68,7 @@ interface GameContextType {
   // Persistence functions
   resetCreationProgress: () => void;
   resetFullGame: () => void;
+  restartCurrentAdventure: () => void;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -80,8 +81,8 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
   const [gameData, setGameDataState] = useState<GameData | null>(null);
   const [currentSceneId, setCurrentSceneIdState] = useState<string | null>(null);
   const [gameHistory, setGameHistoryState] = useState<string[]>([]);
-  const [isLoading, setIsLoadingState] = useState(false); // Renamed to avoid conflict
-  const [error, setErrorState] = useState<string | null>(null); // Renamed to avoid conflict
+  const [isLoading, setIsLoadingState] = useState(false);
+  const [error, setErrorState] = useState<string | null>(null);
   const [creationStep, setCreationStepState] = useState<CreationStep>('story');
   const [isLoaded, setIsLoaded] = useState(false);
 
@@ -120,9 +121,9 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
     if (isLoaded && gameData && gameData.startSceneId) {
       if (currentSceneId === gameData.startSceneId && gameHistory.length === 0) {
         setGameHistoryState([gameData.startSceneId]);
-      } else if (gameHistory.length === 0 && !currentSceneId) { // Handle case where gameData exists but currentSceneId is null
+      } else if (gameHistory.length === 0 && (!currentSceneId || !gameData.scenes[currentSceneId])) { 
          setGameHistoryState([gameData.startSceneId]);
-         setCurrentSceneIdState(gameData.startSceneId); // Also set currentSceneId if it wasn't set
+         setCurrentSceneIdState(gameData.startSceneId);
       }
     }
   }, [gameData, currentSceneId, gameHistory.length, isLoaded]);
@@ -152,7 +153,6 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
       setGameHistoryState([data.startSceneId]);
     } else if (!data) {
       setGameHistoryState([]);
-       // setCurrentSceneIdState(null); // Ensure currentSceneId is also cleared
     }
   }, []);
 
@@ -163,13 +163,17 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
         if (prevHistory.length === 0 && gameData && id === gameData.startSceneId) {
           return [id];
         }
+        // Only add to history if it's a new scene
         if (prevHistory.length > 0 && prevHistory[prevHistory.length - 1] !== id) {
-          return [...prevHistory, id];
+          // Check if the new scene is a valid scene in gameData
+          if (gameData && gameData.scenes[id]) {
+            return [...prevHistory, id];
+          }
         }
         return prevHistory;
       });
     }
-  }, [gameData]); // Depends on gameData to access gameData.startSceneId
+  }, [gameData]);
 
   const setCreationStep = useCallback((step: CreationStep) => setCreationStepState(step), []);
   const setIsLoading = useCallback((loading: boolean) => setIsLoadingState(loading), []);
@@ -201,6 +205,20 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
     setErrorState(null); 
   }, [resetCreationProgress]);
 
+  const restartCurrentAdventure = useCallback(() => {
+    if (gameData && gameData.startSceneId && gameData.scenes[gameData.startSceneId]) {
+      setCurrentSceneIdState(gameData.startSceneId);
+      setGameHistoryState([gameData.startSceneId]);
+      setErrorState(null); // Clear any errors
+      // LocalStorage updates for currentSceneId and gameHistory are handled by their respective useEffect hooks.
+    } else {
+      console.warn("Cannot restart adventure: gameData, startSceneId, or start scene is missing/invalid.");
+      // Optionally, could redirect to /create or show an error to the user
+      // resetFullGame(); // Or, if something is critically wrong, reset everything
+    }
+  }, [gameData]); // Depends on gameData to access startSceneId and validate scene
+
+
   if (!isLoaded) {
     return null; 
   }
@@ -218,7 +236,8 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
       error, setError,
       creationStep, setCreationStep,
       resetCreationProgress,
-      resetFullGame
+      resetFullGame,
+      restartCurrentAdventure
     }}>
       {children}
     </GameContext.Provider>
@@ -232,3 +251,4 @@ export const useGame = () => {
   }
   return context;
 };
+

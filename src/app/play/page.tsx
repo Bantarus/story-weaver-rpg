@@ -5,27 +5,27 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useGame, type SceneNode, type SceneChoice } from "@/context/GameContext";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Loader2, AlertCircle, ArrowLeft, Compass, Eye, Ear } from "lucide-react";
+import { Loader2, AlertCircle, ArrowLeft, Compass, Eye, Ear, RefreshCw } from "lucide-react";
 import Link from "next/link";
-import { GameHistoryDisplay } from "@/components/GameHistoryDisplay"; // Import the new component
+import { GameHistoryDisplay } from "@/components/GameHistoryDisplay"; 
 
 export default function PlayPage() {
   const router = useRouter();
   const { 
     gameData, 
     currentSceneId, setCurrentSceneId,
-    gameHistory, // Get gameHistory from context
+    gameHistory, 
     isLoading: contextIsLoading, 
     error: contextError,
-    resetFullGame 
+    resetFullGame,
+    restartCurrentAdventure 
   } = useGame();
   
   const [currentScene, setCurrentScene] = useState<SceneNode | null>(null);
   const [showText, setShowText] = useState(false); 
 
-  // Effect to handle initial load or if gameData becomes unavailable
   useEffect(() => {
     if (!contextIsLoading && !gameData) {
       resetFullGame(); 
@@ -35,7 +35,6 @@ export default function PlayPage() {
     }
   }, [gameData, contextIsLoading, currentSceneId, router, setCurrentSceneId, resetFullGame]);
 
-  // Effect to update currentScene when currentSceneId or gameData changes
   useEffect(() => {
     if (gameData && currentSceneId && gameData.scenes[currentSceneId]) {
       setShowText(false); 
@@ -46,16 +45,26 @@ export default function PlayPage() {
       return () => clearTimeout(timer);
     } else if (gameData && currentSceneId && !gameData.scenes[currentSceneId]) {
       setCurrentScene(null); 
-      console.error(`Scene with ID "${currentSceneId}" not found in game data. Resetting to start scene.`);
-      setCurrentSceneId(gameData.startSceneId); 
+      // Changed to string concatenation to avoid parsing error
+      console.error('Scene with ID "' + currentSceneId + '" not found in game data. Resetting to start scene.');
+      // Attempt to restart or recover, if startSceneId is valid
+      if (gameData.startSceneId && gameData.scenes[gameData.startSceneId]) {
+        setCurrentSceneId(gameData.startSceneId);
+      } else {
+        // If start scene itself is invalid, then it's a critical error
+        console.error("Start scene is also invalid. Resetting full game.");
+        resetFullGame();
+        router.replace("/create");
+      }
     }
-  }, [gameData, currentSceneId, setCurrentSceneId]);
+  }, [gameData, currentSceneId, setCurrentSceneId, resetFullGame, router]);
 
   const handleChoice = (choice: SceneChoice) => {
     if (gameData && gameData.scenes[choice.nextNodeId]) {
       setCurrentSceneId(choice.nextNodeId);
     } else {
-      console.error(`Next scene ID "${choice.nextNodeId}" not found. Staying in current scene or handling error.`);
+      console.error('Next scene ID "' + choice.nextNodeId + '" not found. Staying in current scene or handling error.');
+      // Potentially set an error state to inform the user
     }
   };
 
@@ -107,7 +116,7 @@ export default function PlayPage() {
           <AlertCircle className="h-5 w-5" />
           <AlertTitle>Scene Error</AlertTitle>
           <AlertDescription>
-            The current scene could not be loaded. This might be due to missing data.
+            The current scene could not be loaded. This might be due to missing data or an invalid scene ID.
             <br />
             <Button variant="link" className="mt-2 p-0 h-auto" onClick={handleNewAdventure}>
               Please start a new game.
@@ -156,8 +165,19 @@ export default function PlayPage() {
               )}
             </div>
           )}
-
         </CardContent>
+        <CardFooter className="pt-4 border-t flex justify-end">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={restartCurrentAdventure}
+            disabled={!gameData || !gameData.startSceneId}
+            className="shadow-sm hover:shadow-md"
+          >
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Restart This Adventure
+          </Button>
+        </CardFooter>
       </Card>
 
       {!isGameEnd && currentScene.choices && currentScene.choices.length > 0 && (
@@ -188,12 +208,11 @@ export default function PlayPage() {
               {currentScene.endingType ? `An Ending: ${currentScene.endingType.replace(/_/g, ' ')}` : "The Path Closes"}
             </CardTitle>
           </CardHeader>
-          <CardContent className="p-6 text-center space-y-4"> {/* Reduced space-y from 6 to 4 to make room for history */}
+          <CardContent className="p-6 text-center space-y-4">
             <p className="text-muted-foreground text-lg">
               {currentScene.endingType ? "Your journey has reached a conclusion." : "The story pauses here, its next chapter unwritten."}
             </p>
             
-            {/* Game History Display */}
             {gameData && gameData.scenes && gameHistory.length > 0 && (
               <GameHistoryDisplay 
                 gameHistory={gameHistory} 
@@ -211,3 +230,4 @@ export default function PlayPage() {
     </div>
   );
 }
+
