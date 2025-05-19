@@ -38,17 +38,16 @@ export default function CreatePage() {
     desiredTone, setDesiredTone,
     desiredLength, setDesiredLength,
     keyThemes, setKeyThemes,
-    gameData, // Get gameData to check for saving
+    gameData, 
     setGameData,
     isLoading, setIsLoading,
     error, setError,
     creationStep, setCreationStep,
     resetCreationProgress,
-    saveAdventureToLibrary, // New context function
-    isAdventureInLibrary // New context function
+    saveAdventureToLibrary, 
+    isAdventureInLibrary 
   } = useGame();
 
-  // Local state for character form inputs (name, archetype, background, goals)
   const [charName, setCharNameLocal] = useState(() => {
     const cd = characterDescription;
     if (!cd) return "";
@@ -74,7 +73,6 @@ export default function CreatePage() {
     return match ? match[1].trim() : "";
   });
 
-  // Effect to re-populate local char fields if characterDescription changes in context
   useEffect(() => {
     if (characterDescription) {
       const nameMatch = characterDescription.match(/Name: (.*?)(?:\nArchetype:|\nBackground:|\nGoals:|$)/s);
@@ -92,12 +90,12 @@ export default function CreatePage() {
   const progressValue = {
     story: 0,
     character: 33,
-    generate: 66, // This step will persist until user chooses to play or save
+    generate: 66, 
     error: creationStep === 'story' ? 0 : creationStep === 'character' ? 33 : 66,
   }[creationStep];
 
   useEffect(() => {
-    setError(null); // Clear error when step changes
+    setError(null); 
   }, [creationStep, setError]);
 
   const handleStorySubmit = async (e: React.FormEvent) => {
@@ -183,7 +181,7 @@ export default function CreatePage() {
       let finalGameDataToSet: GameData | null = null;
 
       if (USE_MOCK_GENERATION) {
-        finalGameDataToSet = mockGameData as GameData;
+        finalGameDataToSet = mockGameData as GameData; // Use the imported mock data
         toast({ title: "Mock RPG Weaved!", description: "Your mock adventure is ready to play or save.", className: "bg-primary text-primary-foreground" });
       } else {
         if (!narrativeOutline) { 
@@ -222,7 +220,6 @@ export default function CreatePage() {
         }
 
         finalGameDataToSet = {
-          // id will be set if loaded from library or after first save
           title: aiFormattedGameData.title && aiFormattedGameData.title.trim() !== "" ? aiFormattedGameData.title.trim() : undefined,
           startSceneId: finalStartSceneId,
           scenes: scenesRecord,
@@ -231,7 +228,6 @@ export default function CreatePage() {
       }
       
       setGameData(finalGameDataToSet);
-      // DO NOT navigate or resetCreationProgress here. User will choose to Play or Save.
       // setCreationStep("generate") is already the current step.
 
     } catch (err) {
@@ -256,16 +252,20 @@ export default function CreatePage() {
       toast({ variant: "destructive", title: "Cannot Save", description: "No game data available to save." });
       return;
     }
+    // Ensure defaultName is always a non-empty string for the prompt
     const defaultName = gameData.adventureName || gameData.title || "My Awesome Adventure";
     const adventureName = window.prompt("Enter a name for your adventure:", defaultName);
 
-    if (adventureName) {
-      if (saveAdventureToLibrary(adventureName)) {
-        toast({ title: "Adventure Saved!", description: `"${adventureName}" has been saved to your library.`, className: "bg-primary text-primary-foreground" });
+    if (adventureName && adventureName.trim() !== "") { // Check if a non-empty name was provided
+      if (saveAdventureToLibrary(adventureName.trim())) {
+        toast({ title: "Adventure Saved!", description: `"${adventureName.trim()}" has been saved to your library.`, className: "bg-primary text-primary-foreground" });
       } else {
-        toast({ variant: "destructive", title: "Save Failed", description: "Could not save the adventure." });
+        // This case should be rare if gameData exists, but good to have
+        toast({ variant: "destructive", title: "Save Failed", description: "Could not save the adventure. Ensure game data is present." });
       }
-    } else {
+    } else if (adventureName === "") { // User clicked OK but left the name blank
+        toast({ variant: "destructive", title: "Save Cancelled", description: "Adventure name cannot be empty." });
+    } else { // User clicked Cancel (prompt returned null)
       toast({ title: "Save Cancelled", description: "Adventure was not saved." });
     }
   };
@@ -471,7 +471,9 @@ export default function CreatePage() {
                 <AlertDescription>
                   Your adventure data has been successfully generated.
                   {gameData.title && <p className="mt-1"><strong>Title:</strong> {gameData.title}</p>}
-                  <p className="mt-1"><strong>Start Scene:</strong> {gameData.scenes[gameData.startSceneId]?.title || gameData.startSceneId}</p>
+                   {gameData.scenes && gameData.startSceneId && gameData.scenes[gameData.startSceneId] &&
+                    <p className="mt-1"><strong>Start Scene:</strong> {gameData.scenes[gameData.startSceneId]?.title || gameData.startSceneId}</p>
+                   }
                 </AlertDescription>
               </Alert>
             )}
@@ -505,3 +507,4 @@ export default function CreatePage() {
   );
 }
 
+      
