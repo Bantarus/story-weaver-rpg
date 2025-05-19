@@ -1,5 +1,13 @@
 
-import type { GameData } from '@/context/GameContext';
+import type { GameData, Effect } from '@/context/GameContext';
+
+const healPotionEffect: Effect = { type: "ADD_ITEM", value: "healing_potion", description: "You found a Healing Potion!" };
+const rustyKeyEvent: Effect = { type: "ADD_ITEM", value: "rusty_key", description: "You picked up a Rusty Key." };
+const cursedStatusEffect: Effect = { type: "ADD_STATUS", value: "cursed", description: "You feel a chilling curse take hold." };
+const blessedStatusEffect: Effect = { type: "ADD_STATUS", value: "blessed", description: "A warm, protective aura surrounds you." };
+const losePotionEffect: Effect = { type: "REMOVE_ITEM", value: "healing_potion", description: "You used a Healing Potion."};
+const removeCurseEffect: Effect = { type: "REMOVE_STATUS", value: "cursed", description: "The chilling curse has been lifted!"};
+
 
 export const mockGameData: GameData = {
   title: "The Mockingbird's Secret",
@@ -12,7 +20,7 @@ export const mockGameData: GameData = {
       choices: [
         { text: "Investigate the Whispering Willow", nextNodeId: "willow_approach" },
         { text: "Ignore the note and go about your day", nextNodeId: "ignore_note" },
-        { text: "Try to find who left the note", nextNodeId: "find_messenger" }
+        { text: "Try to find who left the note", nextNodeId: "find_messenger", effects: [rustyKeyEvent] }
       ],
       visualHint: "crumpled paper old doorstep twilight",
       soundEffect: "wind howling distant tune"
@@ -21,6 +29,7 @@ export const mockGameData: GameData = {
       id: "willow_approach",
       title: "The Whispering Willow",
       text: "You arrive at the ancient Whispering Willow as dusk settles. Its long branches sway, and you hear a soft, bird-like call from within its leaves. The air is thick with an old magic.",
+      effects: [cursedStatusEffect], // Scene load effect
       choices: [
         { text: "Call out to the Mockingbird", nextNodeId: "call_mockingbird" },
         { text: "Silently climb the tree", nextNodeId: "climb_willow" }
@@ -43,7 +52,7 @@ export const mockGameData: GameData = {
       title: "Searching for Clues",
       text: "You look around for any sign of who might have left the note. You spot a small, colorful feather snagged on your door frame. It seems familiar...",
       choices: [
-        { text: "Take the feather and head to the Willow", nextNodeId: "willow_approach_feather" },
+        { text: "Take the feather and head to the Willow", nextNodeId: "willow_approach_feather", effects: [healPotionEffect] },
         { text: "Dismiss it and go inside", nextNodeId: "ignore_note" }
       ],
       visualHint: "colorful feather door frame detective",
@@ -55,7 +64,7 @@ export const mockGameData: GameData = {
         text: "You call out, 'Mockingbird, I seek your wisdom!' A beautiful bird with iridescent feathers flutters down to a low branch. It chirps, 'The secret lies not in the roots, but in the highest song.' It then flies off towards the old tower.",
         choices: [
             { text: "Follow the bird to the old tower", nextNodeId: "tower_approach" },
-            { text: "Search the roots of the Willow anyway", nextNodeId: "search_roots_fail" }
+            { text: "Search the roots of the Willow anyway", nextNodeId: "search_roots_fail", effects: [losePotionEffect] }
         ],
         visualHint: "iridescent bird ancient tree magical",
         soundEffect: "bird song clear melody"
@@ -64,9 +73,10 @@ export const mockGameData: GameData = {
         id: "climb_willow",
         title: "A Perilous Ascent",
         text: "You begin to climb the gnarled branches of the Whispering Willow. It's a tricky climb. Halfway up, you find a small, intricately carved wooden bird. It feels warm to the touch.",
+        effects: [removeCurseEffect], // Scene load effect to remove curse
         choices: [
             { text: "Continue climbing higher", nextNodeId: "willow_top" },
-            { text: "Take the wooden bird and climb down", nextNodeId: "wooden_bird_ending" }
+            { text: "Take the wooden bird and climb down", nextNodeId: "wooden_bird_ending", effects: [{type: "ADD_ITEM", value: "wooden_bird_trinket", description: "You pocket the Wooden Bird Trinket."}] }
         ],
         visualHint: "climbing tree gnarled branches precarious",
         soundEffect: "straining wood heavy breathing"
@@ -77,7 +87,7 @@ export const mockGameData: GameData = {
       text: "Clutching the feather, you make your way to the Whispering Willow. The feather hums faintly in your hand as you get closer. The tree seems to welcome you.",
       choices: [
         { text: "Hold up the feather and speak to the tree", nextNodeId: "feather_speak_willow" },
-        { text: "Silently observe the tree", nextNodeId: "willow_approach" } // Could loop back or lead to a variation
+        { text: "Silently observe the tree", nextNodeId: "willow_approach" } 
       ],
       visualHint: "glowing feather ancient tree twilight",
       soundEffect: "humming sound rustling leaves"
@@ -95,7 +105,7 @@ export const mockGameData: GameData = {
     },
     "search_roots_fail": {
         id: "search_roots_fail",
-        title: " fruitless Search",
+        title: "Fruitless Search",
         text: "You spend a long time searching among the gnarled roots of the Willow, but find nothing of interest. The Mockingbird's song seems to mock you from afar.",
         choices: [],
         isEnding: true,
@@ -127,6 +137,7 @@ export const mockGameData: GameData = {
         id: "feather_speak_willow",
         title: "The Willow's Welcome",
         text: "Holding the feather aloft, you speak to the Willow. The tree's leaves rustle in response, and a hidden path opens at its base, glowing faintly.",
+        effects: [blessedStatusEffect], // Scene load effect
         choices: [
             { text: "Enter the hidden path", nextNodeId: "secret_path" },
             { text: "Hesitate and observe further", nextNodeId: "willow_approach" }
@@ -198,3 +209,5 @@ export const mockGameData: GameData = {
     }
   }
 };
+
+    
