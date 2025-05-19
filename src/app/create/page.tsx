@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useGame, type GameData } from "@/context/GameContext"; // Import GameData type
+import { useGame, type GameData } from "@/context/GameContext"; 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -11,14 +11,20 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Loader2, BookText, UserPlus, Wand2, AlertCircle, CheckCircle } from "lucide-react";
+import { Loader2, BookText, UserPlus, Wand2, AlertCircle, CheckCircle, Play } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 import { analyzeSourceMaterial } from "@/ai/flows/analyze-source-material";
 import { generateNarrativeOutline } from "@/ai/flows/generate-narrative-outline";
-import { formatGameDataJson, type FormatGameDataJsonOutput } from "@/ai/flows/format-game-data-json"; // Import output type
+import { formatGameDataJson, type FormatGameDataJsonOutput } from "@/ai/flows/format-game-data-json";
+import { mockGameData } from "@/lib/mock-game-data"; // Import mock data
 
-type CreateStep = "story" | "character" | "generate"; // Removed "review" as it's not implemented on this page
+type CreateStep = "story" | "character" | "generate"; 
+
+// --- DEVELOPMENT FLAG ---
+// Set to true to use mock data for game generation, bypassing AI calls.
+const USE_MOCK_GENERATION = true; 
+// ------------------------
 
 export default function CreatePage() {
   const router = useRouter();
@@ -26,7 +32,7 @@ export default function CreatePage() {
   const {
     storyText, setStoryText,
     characterDescription, setCharacterDescription, 
-    analysisResult, setAnalysisResult,
+    analysisResult, setAnalysisResult, // analysisResult is kept for potential future display/use
     narrativeOutline, setNarrativeOutline,
     setGameData,
     isLoading, setIsLoading,
@@ -43,7 +49,6 @@ export default function CreatePage() {
     story: 0,
     character: 33,
     generate: 66,
-    // review: 100, // review step not currently used
   }[currentLocalStep];
 
   useEffect(() => {
@@ -56,6 +61,12 @@ export default function CreatePage() {
       setError("Please provide a story text of at least 50 characters.");
       toast({ variant: "destructive", title: "Error", description: "Story text is too short." });
       return;
+    }
+    if (USE_MOCK_GENERATION) {
+        setAnalysisResult({ plotPoints: "Mocked plot points.", characters: "Mocked characters.", settings: "Mocked settings.", themes: "Mocked themes.", tone: "Mocked tone."});
+        toast({ title: "Mock Story Analysis Complete", description: "Proceed to character creation (using mock data).", className: "bg-blue-500 text-white" });
+        setCurrentLocalStep("character");
+        return;
     }
     setIsLoading(true);
     setError(null);
@@ -84,10 +95,18 @@ export default function CreatePage() {
     const fullCharacterDescription = `Name: ${charName}\nArchetype: ${charArchetype}\nBackground: ${charBackground}\nGoals: ${charGoals}`;
     setCharacterDescription(fullCharacterDescription); 
 
+    if (USE_MOCK_GENERATION) {
+        setNarrativeOutline("This is a mocked narrative outline based on your character and the mocked story analysis. It sets the stage for an exciting adventure!");
+        toast({ title: "Mock Narrative Outline Generated", description: "Ready to generate the mock game data.", className: "bg-blue-500 text-white" });
+        setCurrentLocalStep("generate");
+        return;
+    }
+
     setIsLoading(true);
     setError(null);
     try {
       if (!storyText) {
+        // Should be caught by USE_MOCK_GENERATION or previous step
         throw new Error("Story text not found.");
       }
       const result = await generateNarrativeOutline({ storyText, characterDescription: fullCharacterDescription });
@@ -108,22 +127,28 @@ export default function CreatePage() {
     setIsLoading(true);
     setError(null);
     try {
+      if (USE_MOCK_GENERATION) {
+        setGameData(mockGameData as GameData); // Use the imported mock data
+        toast({ title: "Mock RPG Weaved!", description: "Your mock adventure is ready. Redirecting to game...", className: "bg-blue-500 text-white" });
+        router.push("/play");
+        return;
+      }
+
       if (!narrativeOutline) { 
         throw new Error("Narrative outline not found.");
       }
       // formatGameDataJson now returns a structured object (FormatGameDataJsonOutput which is GameData)
       const gameDataResult: FormatGameDataJsonOutput = await formatGameDataJson({ narrativeOutline });
       
-      // No JSON.parse needed as gameDataResult is already an object
-      if (!gameDataResult || !gameDataResult.scenes || !gameDataResult.startSceneId) {
+      if (!gameDataResult || !gameDataResult.scenes || !gameDataResult.startSceneId || Object.keys(gameDataResult.scenes).length === 0) {
         throw new Error("Received incomplete or invalid game data from AI.");
       }
       
-      setGameData(gameDataResult as GameData); // Cast to GameData, should be compatible
+      setGameData(gameDataResult as GameData);
       toast({ title: "RPG Weaved!", description: "Your adventure is ready. Redirecting to game...", className: "bg-green-500 text-white" });
       router.push("/play");
     } catch (err) {
-      console.error("Error formatting game data:", err);
+      console.error("Error formatting/generating game data:", err);
       let errorMessage = "An unknown error occurred during game generation.";
       if (err instanceof Error) {
         errorMessage = err.message;
@@ -139,6 +164,14 @@ export default function CreatePage() {
     <div className="max-w-2xl mx-auto space-y-8">
       <h2 className="text-3xl font-bold text-center text-primary">Create Your RPG Adventure</h2>
       <Progress value={progressValue} className="w-full" />
+
+      {USE_MOCK_GENERATION && (
+         <Alert variant="default" className="bg-blue-50 border-blue-300 text-blue-700">
+          <Play className="h-4 w-4 !text-blue-700" />
+          <AlertTitle>Development Mode</AlertTitle>
+          <AlertDescription>Using mocked data for faster development. AI calls are currently bypassed.</AlertDescription>
+        </Alert>
+      )}
 
       {error && (
         <Alert variant="destructive">
@@ -168,7 +201,7 @@ export default function CreatePage() {
             <CardFooter>
               <Button type="submit" disabled={isLoading || !storyText || storyText.trim().length < 50} className="w-full">
                 {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
-                Analyze Story
+                {USE_MOCK_GENERATION ? "Use Mock Story & Analyze" : "Analyze Story"}
               </Button>
             </CardFooter>
           </form>
@@ -204,7 +237,7 @@ export default function CreatePage() {
               <Button variant="outline" onClick={() => setCurrentLocalStep("story")} disabled={isLoading}>Back to Story</Button>
               <Button type="submit" disabled={isLoading || !charName || !charArchetype || !charBackground || !charGoals } className="w-1/2">
                 {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
-                Craft Character & Get Outline
+                {USE_MOCK_GENERATION ? "Craft Character & Get Mock Outline" : "Craft Character & Get Outline"}
               </Button>
             </CardFooter>
           </form>
@@ -215,17 +248,24 @@ export default function CreatePage() {
         <Card className="shadow-lg">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-2xl"><CheckCircle className="text-green-500" /> Step 3: Weave Your RPG</CardTitle>
-            <CardDescription>Your story and character are ready. The AI has generated a narrative outline. Click below to generate the full RPG data.</CardDescription>
+            <CardDescription>
+              {USE_MOCK_GENERATION 
+                ? "The mock narrative outline is ready. Click below to generate the mock RPG data." 
+                : "Your story and character are ready. The AI has generated a narrative outline. Click below to generate the full RPG data."
+              }
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <h4 className="font-semibold mb-2">Generated Narrative Outline Snippet:</h4>
+            <h4 className="font-semibold mb-2">
+              {USE_MOCK_GENERATION ? "Mock Narrative Outline Snippet:" : "Generated Narrative Outline Snippet:"}
+            </h4>
             <Textarea value={narrativeOutline.substring(0, 300) + (narrativeOutline.length > 300 ? "..." : "")} readOnly rows={5} className="bg-muted/50" />
           </CardContent>
           <CardFooter className="flex justify-between">
             <Button variant="outline" onClick={() => setCurrentLocalStep("character")} disabled={isLoading}>Back to Character</Button>
             <Button onClick={handleGenerateGame} disabled={isLoading} className="w-1/2">
               {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
-              Weave Your RPG!
+              {USE_MOCK_GENERATION ? "Weave Mock RPG!" : "Weave Your RPG!"}
             </Button>
           </CardFooter>
         </Card>
