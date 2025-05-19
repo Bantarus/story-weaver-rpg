@@ -32,14 +32,14 @@ const AISceneNodeSchema = z.object({
   text: z.string().describe("The main narrative text for this scene, describing the current situation, environment, or events. Use newline characters (\\n) for paragraph breaks."),
   choices: z.array(SceneChoiceSchema).describe("A list of choices available to the player in this scene. If empty or not present (e.g. for an ending scene), provide an empty array."),
   isEnding: z.boolean().describe("Set to true if this scene represents a conclusion or significant ending point of the adventure or a branch. Otherwise, set to false."),
-  endingType: z.string().describe("If isEnding is true, this field can describe the nature of the ending (e.g., 'victory', 'tragedy', 'cliffhanger'). If isEnding is false or no specific type, provide an empty string or 'none'."),
-  visualHint: z.string().describe("A brief description or keywords for a visual element that could accompany this scene (e.g., 'sun-dappled forest path'). If not applicable, provide an empty string."),
-  soundEffect: z.string().describe("A suggestion for a sound effect that could be played during this scene (e.g., 'rustling leaves'). If not applicable, provide an empty string.")
+  endingType: z.string().describe("If isEnding is true, this field can describe the nature of the ending (e.g., 'victory', 'tragedy', 'cliffhanger'). If isEnding is false or no specific type, provide an empty string or 'none'.").default("none"),
+  visualHint: z.string().describe("A brief description or keywords for a visual element that could accompany this scene (e.g., 'sun-dappled forest path'). If not applicable, provide an empty string.").default(""),
+  soundEffect: z.string().describe("A suggestion for a sound effect that could be played during this scene (e.g., 'rustling leaves'). If not applicable, provide an empty string.").default("")
 });
 
 // Stricter GameData schema for AI generation
 const AIGameDataSchema = z.object({
-  title: z.string().describe("The overall title for the generated RPG adventure (e.g., 'The Shadow of the Forgotten King'). If not applicable, provide an empty string."),
+  title: z.string().describe("The overall title for the generated RPG adventure (e.g., 'The Shadow of the Forgotten King'). If not applicable, provide an empty string.").default(""),
   startSceneId: z.string().describe("The ID of the initial scene where the game begins. This ID must correspond to one of the scene IDs in the 'scenes' array."),
   scenes: z.array(AISceneNodeSchema).describe("An array of AISceneNodeSchema objects. Each scene must have a unique 'id'."),
 });
@@ -64,10 +64,10 @@ The game should be a branching narrative where the player makes choices that lea
 Narrative Outline:
 {{{narrativeOutline}}}
 
-Please generate a JSON object adhering to the following structure. All string fields are required; if a feature is not applicable for a particular scene (e.g. title, visualHint, soundEffect, endingType), provide an empty string (""). For boolean fields like 'isEnding', provide true or false.
+Please generate a JSON object adhering to the following structure. All string fields are required; if a feature is not applicable for a particular scene (e.g. title, visualHint, soundEffect, endingType), provide an empty string (""). For boolean fields like 'isEnding', provide true or false. Ensure 'endingType' is "none" if 'isEnding' is false or no specific type.
 - \`title\` (string): An engaging title for the entire adventure. Use an empty string if not applicable.
 - \`startSceneId\` (string): The ID of the scene where the game should begin. This must be the 'id' of one of the scenes in the \`scenes\` array.
-- \`scenes\` (ARRAY of SceneNode objects): A list of all game scenes. THIS MUST BE A JSON ARRAY, where each element is a SceneNode object. Each SceneNode object in this array must have the following properties:
+- \`scenes\` (JSON ARRAY of SceneNode objects): A list of all game scenes. THIS MUST BE A JSON ARRAY, where each element is a SceneNode object. Each SceneNode object in this array must have the following properties:
   - \`id\` (string): A unique identifier for this scene (e.g., "scene_01", "forest_encounter").
   - \`title\` (string): A short, descriptive title for the scene. Use an empty string if not applicable.
   - \`text\` (string): The main descriptive text for the scene. Use newline characters (\\n) for paragraph breaks.
@@ -98,55 +98,67 @@ const formatGameDataJsonFlow = ai.defineFlow(
   },
   async input => {
     const llmResponse = await prompt(input); // Returns GenerateResponse
-    const aiOutputText = llmResponse.text;
+    let aiOutputText = llmResponse.text;
 
     if (!aiOutputText) {
       throw new Error('AI failed to generate game data text.');
     }
 
+    // Trim whitespace
+    aiOutputText = aiOutputText.trim();
+
+    // Strip Markdown fences if present
+    if (aiOutputText.startsWith("```json")) {
+      aiOutputText = aiOutputText.substring(7); // Remove ```json\n
+      if (aiOutputText.endsWith("```")) {
+        aiOutputText = aiOutputText.substring(0, aiOutputText.length - 3);
+      }
+    } else if (aiOutputText.startsWith("```")) { // In case it's just ```
+        aiOutputText = aiOutputText.substring(3);
+        if (aiOutputText.endsWith("```")) {
+            aiOutputText = aiOutputText.substring(0, aiOutputText.length - 3);
+        }
+    }
+    aiOutputText = aiOutputText.trim(); // Trim again after stripping
+
     let parsedJsonFromAI: any;
     try {
       parsedJsonFromAI = JSON.parse(aiOutputText);
     } catch (e) {
-      console.error('AI output was not valid JSON:', aiOutputText);
+      console.error('AI output was not valid JSON after attempting to strip fences:', aiOutputText);
       throw new Error('AI output was not valid JSON: ' + (e instanceof Error ? e.message : String(e)));
     }
 
     let scenesArrayFromAI: any[];
     if (parsedJsonFromAI.scenes && typeof parsedJsonFromAI.scenes === 'object' && !Array.isArray(parsedJsonFromAI.scenes)) {
       // AI returned scenes as an object/map, convert to array
+      console.warn('AI returned scenes as an object, converting to array.');
       scenesArrayFromAI = Object.values(parsedJsonFromAI.scenes);
     } else if (parsedJsonFromAI.scenes && Array.isArray(parsedJsonFromAI.scenes)) {
       // AI returned scenes as an array, use as is
       scenesArrayFromAI = parsedJsonFromAI.scenes;
     } else {
-      console.error('AI output structure error. `scenes` field:', parsedJsonFromAI.scenes);
+      console.error('AI output structure error. `scenes` field was not an array or object:', parsedJsonFromAI.scenes);
       throw new Error('AI output did not contain a valid scenes structure (expected array or object).');
     }
     
-    // Construct an object that matches AIGameDataSchema for subsequent processing
-    // This `aiOutputForProcessing` will be used by the existing transformation logic
     const aiOutputForProcessing = {
-      title: parsedJsonFromAI.title || "", // Ensure title exists
-      startSceneId: parsedJsonFromAI.startSceneId || "", // Ensure startSceneId exists
-      scenes: scenesArrayFromAI, // scenes is now guaranteed to be an array
+      title: parsedJsonFromAI.title || "", 
+      startSceneId: parsedJsonFromAI.startSceneId || "", 
+      scenes: scenesArrayFromAI, 
     };
 
-
-    // Validate the processed AI output before transforming it to GameData
-    // This ensures that what we pass to the transformation logic is what AIGameDataSchema expects
     try {
         AIGameDataSchema.parse(aiOutputForProcessing);
     } catch (validationError) {
-        console.error("Transformed AI output does not match AIGameDataSchema:", validationError);
-        throw new Error("Internal error: Transformed AI output is not valid before final conversion.");
+        console.error("Processed AI output does not match AIGameDataSchema before transformation:", validationError);
+        console.error("Data that failed validation:", JSON.stringify(aiOutputForProcessing, null, 2));
+        throw new Error("Internal error: Processed AI output is not valid before final conversion.");
     }
 
-
-    // Transform AI output (with required fields and empty strings) to application's GameData structure (with optional fields)
     const scenesRecord: Record<string, SceneNode> = {};
-    if (aiOutputForProcessing.scenes && Array.isArray(aiOutputForProcessing.scenes)) { // This check is now more of a safeguard
-      aiOutputForProcessing.scenes.forEach((aiScene: any) => { // aiScene should conform to AISceneNodeSchema
+    if (aiOutputForProcessing.scenes && Array.isArray(aiOutputForProcessing.scenes)) { 
+      aiOutputForProcessing.scenes.forEach((aiScene: any) => { 
         if (aiScene.id) {
           const appScene: SceneNode = {
             id: aiScene.id,
@@ -164,8 +176,7 @@ const formatGameDataJsonFlow = ai.defineFlow(
         }
       });
     } else {
-      // This path should ideally not be reached if pre-processing is correct
-      throw new Error('Error processing AI scenes: expected an array.');
+      throw new Error('Error processing AI scenes: expected an array after initial processing.');
     }
     
     let finalStartSceneId = aiOutputForProcessing.startSceneId;
@@ -176,12 +187,12 @@ const formatGameDataJsonFlow = ai.defineFlow(
         console.warn(`Generated startSceneId '${finalStartSceneId}' not found or invalid. Defaulting to first available scene: ${availableSceneIds[0]}`);
         finalStartSceneId = availableSceneIds[0];
       } else {
-        // If no scenes at all, it's a critical failure.
         throw new Error('AI generated game data with no scenes or an invalid startSceneId after transformation.');
       }
     }
-     // Ensure startSceneId exists even if title is undefined
-    if(parsedJsonFromAI.title === undefined && finalStartSceneId === "") {
+    
+    if(!parsedJsonFromAI.title && !finalStartSceneId) { // Check if both are problematic
+        console.error('AI generated game data is critically incomplete (missing title and startSceneId). Parsed JSON from AI:', parsedJsonFromAI);
         throw new Error('AI generated game data is critically incomplete (missing title and startSceneId).');
     }
 
@@ -192,6 +203,14 @@ const formatGameDataJsonFlow = ai.defineFlow(
       scenes: scenesRecord,
     };
     
+    // Final validation against the application's expected GameData structure (loosely, as GameData has optional fields)
+    // This is more for a sanity check. The AIGameDataSchema.parse above is the stricter one.
+    if (!finalGameData.startSceneId || !finalGameData.scenes[finalGameData.startSceneId]) {
+        console.error("Final game data is invalid after all transformations. StartSceneId or scene missing.", finalGameData);
+        throw new Error("Critical error: Final game data structure is invalid.");
+    }
+
     return finalGameData;
   }
 );
+
