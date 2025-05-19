@@ -3,11 +3,11 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useGame, SceneNode, SceneChoice } from "@/context/GameContext";
+import { useGame, type SceneNode, type SceneChoice } from "@/context/GameContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Loader2, AlertCircle, ArrowLeft, Compass } from "lucide-react";
+import { Loader2, AlertCircle, ArrowLeft, Compass, Eye, Ear } from "lucide-react";
 import Link from "next/link";
 
 export default function PlayPage() {
@@ -19,8 +19,6 @@ export default function PlayPage() {
 
   useEffect(() => {
     if (!contextIsLoading && !gameData) {
-      // If game data is not loaded and we are not in a loading state from context,
-      // redirect to create page. This might happen if user navigates directly.
       router.replace("/create");
     } else if (gameData && !currentSceneId) {
       setCurrentSceneId(gameData.startSceneId);
@@ -29,17 +27,16 @@ export default function PlayPage() {
 
   useEffect(() => {
     if (gameData && currentSceneId && gameData.scenes[currentSceneId]) {
-      setShowText(false); // Reset animation trigger
+      setShowText(false); 
       const timer = setTimeout(() => {
         setCurrentScene(gameData.scenes[currentSceneId]);
-        setShowText(true); // Trigger animation after a short delay for content update
-      }, 50); // Small delay to ensure content update before animation
+        setShowText(true); 
+      }, 50); 
       return () => clearTimeout(timer);
     } else if (gameData && currentSceneId && !gameData.scenes[currentSceneId]) {
-      // Scene ID is invalid or not found
-      setCurrentScene(null); // Clear current scene
+      setCurrentScene(null); 
       console.error(`Scene with ID "${currentSceneId}" not found in game data.`);
-      // Optionally, set an error state or redirect
+      // Future: set an error display state here
     }
   }, [gameData, currentSceneId]);
 
@@ -75,8 +72,6 @@ export default function PlayPage() {
   }
   
   if (!gameData || !currentScene) {
-     // This case handles if gameData is present but currentSceneId is invalid
-     // or if gameData itself is null (which should be caught by redirect earlier)
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-200px)]">
          <Alert variant="destructive" className="max-w-lg">
@@ -94,43 +89,51 @@ export default function PlayPage() {
     );
   }
 
+  const isGameEnd = currentScene.isEnding || !currentScene.choices || currentScene.choices.length === 0;
+
   return (
     <div className="max-w-3xl mx-auto space-y-8">
-      <Card className="shadow-xl overflow-hidden">
-        {gameData.title && (
-           <CardHeader>
-             <CardTitle className="text-3xl font-bold text-primary text-center">{gameData.title}</CardTitle>
-             {currentScene.title && <CardDescription className="text-center text-lg">{currentScene.title}</CardDescription>}
+      <Card className="shadow-xl overflow-hidden bg-card/80 backdrop-blur-sm">
+        {(gameData.title || currentScene.title) && (
+           <CardHeader className="pb-2">
+             {gameData.title && <CardTitle className="text-3xl font-bold text-primary text-center">{gameData.title}</CardTitle>}
+             {currentScene.title && <CardDescription className={`text-center text-lg ${gameData.title ? 'mt-1' : 'text-2xl font-semibold text-foreground'}`}>{currentScene.title}</CardDescription>}
            </CardHeader>
         )}
         <CardContent className="p-6 md:p-8 space-y-6">
           <div 
-            key={currentScene.id} // Ensure re-render for animation
-            className={`prose prose-lg max-w-none text-foreground leading-relaxed scene-text-enter ${showText ? 'scene-text-enter-active' : ''}`}
-            style={{ whiteSpace: 'pre-line' }} // Preserve line breaks from AI
+            key={currentScene.id} 
+            className={`prose prose-xl max-w-none text-foreground leading-relaxed scene-text-enter ${showText ? 'scene-text-enter-active' : ''}`}
+            style={{ whiteSpace: 'pre-line' }} 
           >
             {currentScene.text}
           </div>
           
-          {currentScene.visualHint && (
-            <div className="p-3 bg-muted/50 rounded-md border border-dashed">
-              <p className="text-sm text-muted-foreground italic">Visual Hint: {currentScene.visualHint}</p>
-            </div>
-          )}
+          {(currentScene.visualHint || currentScene.soundEffect) && (
+            <div className="space-y-3 pt-4 mt-4 border-t border-dashed">
+              {currentScene.visualHint && (
+                <div className="flex items-start gap-2 p-3 bg-muted/30 rounded-md border border-dashed border-border/50">
+                  <Eye className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-muted-foreground italic"><span className="font-semibold">Visual:</span> {currentScene.visualHint}</p>
+                </div>
+              )}
 
-          {currentScene.soundEffect && (
-            <div className="p-3 bg-muted/50 rounded-md border border-dashed">
-              <p className="text-sm text-muted-foreground italic">Sound Effect: {currentScene.soundEffect}</p>
+              {currentScene.soundEffect && (
+                <div className="flex items-start gap-2 p-3 bg-muted/30 rounded-md border border-dashed border-border/50">
+                  <Ear className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-muted-foreground italic"><span className="font-semibold">Sound:</span> {currentScene.soundEffect}</p>
+                </div>
+              )}
             </div>
           )}
 
         </CardContent>
       </Card>
 
-      {currentScene.choices && currentScene.choices.length > 0 && (
-        <Card className="shadow-lg">
+      {!isGameEnd && currentScene.choices && currentScene.choices.length > 0 && (
+        <Card className="shadow-lg bg-card/80 backdrop-blur-sm">
           <CardHeader>
-            <CardTitle className="text-xl flex items-center gap-2"><Compass /> What do you do?</CardTitle>
+            <CardTitle className="text-xl flex items-center gap-2"><Compass /> What path will you tread?</CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {currentScene.choices.map((choice, index) => (
@@ -138,7 +141,7 @@ export default function PlayPage() {
                 key={index}
                 onClick={() => handleChoice(choice)}
                 variant="outline"
-                className="text-left justify-start p-4 h-auto hover:bg-accent hover:text-accent-foreground transition-colors duration-150 shadow-sm hover:shadow-md"
+                className="text-left justify-start p-4 h-auto hover:bg-primary/10 hover:border-primary transition-all duration-150 shadow-sm hover:shadow-md text-base"
                 aria-label={`Choose: ${choice.text}`}
               >
                 {choice.text}
@@ -147,13 +150,21 @@ export default function PlayPage() {
           </CardContent>
         </Card>
       )}
-       {(!currentScene.choices || currentScene.choices.length === 0) && (
-        <Card className="shadow-lg">
-          <CardContent className="p-6 text-center">
-            <p className="text-muted-foreground text-lg">The story concludes here for now.</p>
+
+       {isGameEnd && (
+        <Card className="shadow-lg bg-card/80 backdrop-blur-sm">
+          <CardHeader>
+            <CardTitle className="text-xl text-center">
+              {currentScene.endingType ? `An Ending: ${currentScene.endingType.replace(/_/g, ' ')}` : "The Path Closes"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-6 text-center space-y-4">
+            <p className="text-muted-foreground text-lg">
+              {currentScene.endingType ? "Your journey has reached a conclusion." : "The story pauses here, its next chapter unwritten."}
+            </p>
             <Link href="/create">
-              <Button variant="default" className="mt-4">
-                <ArrowLeft className="mr-2 h-4 w-4" /> Create a New Adventure
+              <Button variant="default" size="lg" className="mt-4 shadow-md hover:shadow-lg">
+                <ArrowLeft className="mr-2 h-5 w-5" /> Weave a New Adventure
               </Button>
             </Link>
           </CardContent>
@@ -162,3 +173,4 @@ export default function PlayPage() {
     </div>
   );
 }
+
