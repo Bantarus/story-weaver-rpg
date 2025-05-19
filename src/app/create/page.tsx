@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { useGame, type GameData, type SceneNode, type DesiredTone, type DesiredLength } from "@/context/GameContext"; 
+import { useGame, type GameData, type SceneNode, type DesiredTone, type DesiredLength, type Effect } from "@/context/GameContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -18,10 +18,10 @@ import { useToast } from "@/hooks/use-toast";
 import { analyzeSourceMaterial } from "@/ai/flows/analyze-source-material";
 import { generateNarrativeOutline } from "@/ai/flows/generate-narrative-outline";
 import { formatGameDataJson, type FormatGameDataJsonOutput, type AISceneNode } from "@/ai/flows/format-game-data-json";
-import { mockGameData } from "@/lib/mock-game-data"; 
+import { mockGameData } from "@/lib/mock-game-data";
 
 // --- DEVELOPMENT FLAG ---
-const USE_MOCK_GENERATION = true; 
+const USE_MOCK_GENERATION = true;
 // ------------------------
 
 const toneOptions: DesiredTone[] = ["Default", "Heroic", "Mysterious", "Comedic", "Tragic", "Dramatic"];
@@ -32,20 +32,20 @@ export default function CreatePage() {
   const { toast } = useToast();
   const {
     storyText, setStoryText,
-    characterDescription, setCharacterDescription, 
-    analysisResult, setAnalysisResult, 
+    characterDescription, setCharacterDescription,
+    analysisResult, setAnalysisResult,
     narrativeOutline, setNarrativeOutline,
     desiredTone, setDesiredTone,
     desiredLength, setDesiredLength,
     keyThemes, setKeyThemes,
-    gameData, 
+    gameData,
     setGameData,
     isLoading, setIsLoading,
     error, setError,
     creationStep, setCreationStep,
     resetCreationProgress,
-    saveAdventureToLibrary, 
-    isAdventureInLibrary 
+    saveAdventureToLibrary,
+    isAdventureInLibrary
   } = useGame();
 
   const [charName, setCharNameLocal] = useState(() => {
@@ -90,12 +90,12 @@ export default function CreatePage() {
   const progressValue = {
     story: 0,
     character: 33,
-    generate: 66, 
+    generate: 66,
     error: creationStep === 'story' ? 0 : creationStep === 'character' ? 33 : 66,
   }[creationStep];
 
   useEffect(() => {
-    setError(null); 
+    setError(null);
   }, [creationStep, setError]);
 
   const handleStorySubmit = async (e: React.FormEvent) => {
@@ -139,7 +139,7 @@ export default function CreatePage() {
       return;
     }
     const fullCharacterDescription = `Name: ${charName}\nArchetype: ${charArchetype}\nBackground: ${charBackground}\nGoals: ${charGoals}`;
-    setCharacterDescription(fullCharacterDescription); 
+    setCharacterDescription(fullCharacterDescription);
 
     if (USE_MOCK_GENERATION) {
         setNarrativeOutline("This is a mocked narrative outline based on your character and the mocked story analysis. It sets the stage for an exciting adventure!");
@@ -154,8 +154,8 @@ export default function CreatePage() {
       if (!storyText) {
         throw new Error("Story text not found. Please go back to the story step.");
       }
-      const result = await generateNarrativeOutline({ 
-        storyText, 
+      const result = await generateNarrativeOutline({
+        storyText,
         characterDescription: fullCharacterDescription,
         desiredTone: desiredTone === "Default" ? undefined : desiredTone,
         desiredLength: desiredLength === "Default" ? undefined : desiredLength,
@@ -181,52 +181,58 @@ export default function CreatePage() {
       let finalGameDataToSet: GameData | null = null;
 
       if (USE_MOCK_GENERATION) {
-        finalGameDataToSet = mockGameData as GameData; 
+        finalGameDataToSet = mockGameData as GameData;
         toast({ title: "Mock RPG Weaved!", description: "Your mock adventure is ready to play or save.", className: "bg-primary text-primary-foreground" });
       } else {
-        if (!narrativeOutline) { 
+        if (!narrativeOutline) {
           throw new Error("Narrative outline not found. Please go back to the character step.");
         }
-        
-        const aiFormattedGameData: FormatGameDataJsonOutput = await formatGameDataJson({ narrativeOutline });
-        
-        if (!aiFormattedGameData || !aiFormattedGameData.scenes || !aiFormattedGameData.startSceneId || aiFormattedGameData.scenes.length === 0) {
+
+        const aiFormattedOutput: FormatGameDataJsonOutput = await formatGameDataJson({ narrativeOutline });
+
+        if (!aiFormattedOutput || !aiFormattedOutput.scenes || !aiFormattedOutput.startSceneId || aiFormattedOutput.scenes.length === 0) {
           throw new Error("Received incomplete or invalid game data structure from AI.");
         }
-        
+
         const scenesRecord: Record<string, SceneNode> = {};
-        aiFormattedGameData.scenes.forEach((aiScene: AISceneNode) => {
+        aiFormattedOutput.scenes.forEach((aiScene: AISceneNode) => {
           scenesRecord[aiScene.id] = {
             id: aiScene.id,
             title: aiScene.title && aiScene.title.trim() !== "" ? aiScene.title.trim() : undefined,
             text: aiScene.text,
-            choices: aiScene.choices, 
+            choices: aiScene.choices.map(choice => ({ // Ensure choice effects are mapped
+                text: choice.text,
+                nextNodeId: choice.nextNodeId,
+                effects: choice.effects && choice.effects.length > 0 ? choice.effects : undefined,
+            })),
+            effects: aiScene.effects && aiScene.effects.length > 0 ? aiScene.effects : undefined, // Map scene effects
             isEnding: aiScene.isEnding,
             endingType: aiScene.endingType && aiScene.endingType.trim() !== "" && aiScene.endingType.trim().toLowerCase() !== "none" ? aiScene.endingType.trim() : undefined,
             visualHint: aiScene.visualHint && aiScene.visualHint.trim() !== "" ? aiScene.visualHint.trim() : undefined,
             soundEffect: aiScene.soundEffect && aiScene.soundEffect.trim() !== "" ? aiScene.soundEffect.trim() : undefined,
           };
         });
-        
-        let finalStartSceneId = aiFormattedGameData.startSceneId;
+
+        let finalStartSceneId = aiFormattedOutput.startSceneId;
         if (!scenesRecord[finalStartSceneId]) {
           const availableSceneIds = Object.keys(scenesRecord);
           if (availableSceneIds.length > 0) {
             console.warn(`AI-generated startSceneId '${finalStartSceneId}' not found in processed scenes. Defaulting to first available scene: ${availableSceneIds[0]}`);
             finalStartSceneId = availableSceneIds[0];
           } else {
+            console.error('AI generated game data with no processable scenes.');
             throw new Error('AI generated game data with no processable scenes.');
           }
         }
 
         finalGameDataToSet = {
-          title: aiFormattedGameData.title && aiFormattedGameData.title.trim() !== "" ? aiFormattedGameData.title.trim() : undefined,
+          title: aiFormattedOutput.title && aiFormattedOutput.title.trim() !== "" ? aiFormattedOutput.title.trim() : undefined,
           startSceneId: finalStartSceneId,
           scenes: scenesRecord,
         };
         toast({ title: "RPG Weaved!", description: "Your adventure is ready to play or save.", className: "bg-primary text-primary-foreground" });
       }
-      
+
       setGameData(finalGameDataToSet);
 
     } catch (err) {
@@ -239,7 +245,7 @@ export default function CreatePage() {
         }
       }
       setError(errorMessage);
-      setCreationStep('error'); 
+      setCreationStep('error');
       toast({ variant: "destructive", title: "Game Generation Failed", description: errorMessage, duration: 7000 });
     } finally {
       setIsLoading(false);
@@ -255,7 +261,6 @@ export default function CreatePage() {
     }
     console.log("handleSaveAdventureClick: gameData is present. Current gameData.title:", gameData.title, "gameData.adventureName:", gameData.adventureName);
 
-    // Defer the prompt slightly.
     setTimeout(() => {
       console.log("handleSaveAdventureClick: setTimeout callback executed.");
       const defaultName = gameData.adventureName || gameData.title || "My Awesome Adventure";
@@ -263,7 +268,6 @@ export default function CreatePage() {
 
       let adventureName: string | null = null;
       try {
-        // Add a try-catch specifically around the prompt in case it throws an error in some environments
         adventureName = window.prompt("Enter a name for your adventure:", defaultName);
         console.log("handleSaveAdventureClick: window.prompt call completed. Returned value:", adventureName);
       } catch (promptError) {
@@ -278,24 +282,22 @@ export default function CreatePage() {
           toast({ title: "Adventure Saved!", description: `"${adventureName.trim()}" has been saved to your library.`, className: "bg-primary text-primary-foreground" });
           console.log("handleSaveAdventureClick: Save successful.");
         } else {
-          // This case should be rare if gameData was present at the start
           toast({ variant: "destructive", title: "Save Failed", description: "Could not save the adventure. Game data might be missing (unexpected)." });
           console.error("handleSaveAdventureClick: saveAdventureToLibrary returned false.");
         }
-      } else if (adventureName === "") { // User clicked OK but left the name blank
+      } else if (adventureName === "") {
           toast({ variant: "destructive", title: "Save Cancelled", description: "Adventure name cannot be empty." });
           console.log("handleSaveAdventureClick: Save cancelled - adventureName was empty string.");
-      } else if (adventureName === null) { // User clicked Cancel or prompt was dismissed/returned null
+      } else if (adventureName === null) {
         toast({ title: "Save Cancelled", description: "Adventure was not saved." });
         console.log("handleSaveAdventureClick: Save cancelled - adventureName was null.");
       } else {
-        // Fallback for any unexpected state of adventureName
         console.warn("handleSaveAdventureClick: Unexpected adventureName value after prompt:", adventureName);
         toast({ title: "Save Cancelled", description: "An unexpected issue occurred determining the adventure name." });
       }
     }, 0);
   }, [gameData, saveAdventureToLibrary, toast]);
-  
+
   const handlePlayNowClick = () => {
     if (!gameData) {
       toast({ variant: "destructive", title: "Cannot Play", description: "No game data available to play."});
@@ -303,17 +305,17 @@ export default function CreatePage() {
       setCreationStep('error');
       return;
     }
-    resetCreationProgress(); 
+    resetCreationProgress();
     router.push("/play");
   };
-  
+
   const handleTryAgainOnError = () => {
     setError(null);
-    if (narrativeOutline) { 
+    if (narrativeOutline) {
         setCreationStep('generate');
-    } else if (analysisResult) { 
+    } else if (analysisResult) {
         setCreationStep('character');
-    } else { 
+    } else {
         setCreationStep('story');
     }
   };
@@ -436,13 +438,13 @@ export default function CreatePage() {
                   </div>
                   <div>
                     <Label htmlFor="keyThemes">Key Themes to Emphasize</Label>
-                    <Textarea 
-                      id="keyThemes" 
-                      value={keyThemes || ""} 
-                      onChange={(e) => setKeyThemes(e.target.value)} 
-                      placeholder="e.g., Redemption, The struggle between good and evil, The importance of friendship" 
-                      rows={2} 
-                      disabled={isLoading} 
+                    <Textarea
+                      id="keyThemes"
+                      value={keyThemes || ""}
+                      onChange={(e) => setKeyThemes(e.target.value)}
+                      placeholder="e.g., Redemption, The struggle between good and evil, The importance of friendship"
+                      rows={2}
+                      disabled={isLoading}
                     />
                   </div>
                 </CardContent>
@@ -459,7 +461,7 @@ export default function CreatePage() {
           </form>
         </Card>
       )}
-      
+
       {creationStep === "generate" && !error && (
         <Card className="shadow-lg">
           <CardHeader>
@@ -469,8 +471,8 @@ export default function CreatePage() {
             </CardTitle>
             {!gameData && narrativeOutline && (
               <CardDescription>
-                {USE_MOCK_GENERATION 
-                  ? "The mock narrative outline is ready. Click below to generate the mock RPG data." 
+                {USE_MOCK_GENERATION
+                  ? "The mock narrative outline is ready. Click below to generate the mock RPG data."
                   : "Your story and character are ready. The AI has generated a narrative outline. Click below to generate the full RPG data."
                 }
               </CardDescription>
@@ -531,6 +533,5 @@ export default function CreatePage() {
     </div>
   );
 }
-      
-        
 
+    
