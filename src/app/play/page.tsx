@@ -12,19 +12,31 @@ import Link from "next/link";
 
 export default function PlayPage() {
   const router = useRouter();
-  const { gameData, isLoading: contextIsLoading, error: contextError } = useGame();
-  const [currentSceneId, setCurrentSceneId] = useState<string | null>(null);
+  const { 
+    gameData, 
+    currentSceneId, setCurrentSceneId,
+    isLoading: contextIsLoading, 
+    error: contextError,
+    resetFullGame 
+  } = useGame();
+  
   const [currentScene, setCurrentScene] = useState<SceneNode | null>(null);
-  const [showText, setShowText] = useState(false); // For fade-in animation
+  const [showText, setShowText] = useState(false); 
 
+  // Effect to handle initial load or if gameData becomes unavailable
   useEffect(() => {
     if (!contextIsLoading && !gameData) {
+      // If no game data and not loading, redirect to create.
+      // This can happen if user lands here directly or clears storage and refreshes.
+      resetFullGame(); // Ensure a clean slate if redirecting
       router.replace("/create");
     } else if (gameData && !currentSceneId) {
+      // Game data exists, but no current scene ID (e.g., new game loaded)
       setCurrentSceneId(gameData.startSceneId);
     }
-  }, [gameData, contextIsLoading, currentSceneId, router]);
+  }, [gameData, contextIsLoading, currentSceneId, router, setCurrentSceneId, resetFullGame]);
 
+  // Effect to update currentScene when currentSceneId or gameData changes
   useEffect(() => {
     if (gameData && currentSceneId && gameData.scenes[currentSceneId]) {
       setShowText(false); 
@@ -35,16 +47,27 @@ export default function PlayPage() {
       return () => clearTimeout(timer);
     } else if (gameData && currentSceneId && !gameData.scenes[currentSceneId]) {
       setCurrentScene(null); 
-      console.error(`Scene with ID "${currentSceneId}" not found in game data.`);
-      // Future: set an error display state here
+      console.error(`Scene with ID "${currentSceneId}" not found in game data. Resetting to start scene.`);
+      // Attempt to reset to start scene if current is invalid
+      setCurrentSceneId(gameData.startSceneId); 
     }
-  }, [gameData, currentSceneId]);
+  }, [gameData, currentSceneId, setCurrentSceneId]);
 
   const handleChoice = (choice: SceneChoice) => {
-    setCurrentSceneId(choice.nextNodeId);
+    if (gameData && gameData.scenes[choice.nextNodeId]) {
+      setCurrentSceneId(choice.nextNodeId);
+    } else {
+      console.error(`Next scene ID "${choice.nextNodeId}" not found. Staying in current scene or handling error.`);
+      // Optionally, set an error state or navigate to a generic error scene
+    }
   };
 
-  if (contextIsLoading) {
+  const handleNewAdventure = () => {
+    resetFullGame();
+    router.push("/create");
+  };
+
+  if (contextIsLoading || !gameData && !contextError) { // Show loading if context is loading OR if gameData isn't ready yet (and no error)
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-200px)]">
         <Loader2 className="h-16 w-16 animate-spin text-primary mb-4" />
@@ -62,32 +85,43 @@ export default function PlayPage() {
           <AlertDescription>
             {contextError}
             <br />
-            <Link href="/create">
-              <Button variant="link" className="mt-2 p-0 h-auto">Try creating a new game</Button>
-            </Link>
+            <Button variant="link" className="mt-2 p-0 h-auto" onClick={handleNewAdventure}>
+              Try creating a new game
+            </Button>
           </AlertDescription>
         </Alert>
       </div>
     );
   }
   
-  if (!gameData || !currentScene) {
-    return (
+  // This check should ideally not be hit if the useEffect for initial load is working correctly
+  if (!gameData || !currentSceneId) {
+     return (
+      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-200px)]">
+        <Loader2 className="h-16 w-16 animate-spin text-primary mb-4" />
+        <p className="text-xl text-muted-foreground">Initializing game...</p>
+      </div>
+    );
+  }
+
+  if (!currentScene) {
+     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-200px)]">
          <Alert variant="destructive" className="max-w-lg">
           <AlertCircle className="h-5 w-5" />
-          <AlertTitle>Game Error</AlertTitle>
+          <AlertTitle>Scene Error</AlertTitle>
           <AlertDescription>
-            The game data is missing or the current scene could not be loaded.
+            The current scene could not be loaded. This might be due to missing data.
             <br />
-            <Link href="/create">
-              <Button variant="link" className="mt-2 p-0 h-auto">Please start a new game.</Button>
-            </Link>
+            <Button variant="link" className="mt-2 p-0 h-auto" onClick={handleNewAdventure}>
+              Please start a new game.
+            </Button>
           </AlertDescription>
         </Alert>
       </div>
     );
   }
+
 
   const isGameEnd = currentScene.isEnding || !currentScene.choices || currentScene.choices.length === 0;
 
@@ -162,15 +196,12 @@ export default function PlayPage() {
             <p className="text-muted-foreground text-lg">
               {currentScene.endingType ? "Your journey has reached a conclusion." : "The story pauses here, its next chapter unwritten."}
             </p>
-            <Link href="/create">
-              <Button variant="default" size="lg" className="mt-4 shadow-md hover:shadow-lg">
-                <ArrowLeft className="mr-2 h-5 w-5" /> Weave a New Adventure
-              </Button>
-            </Link>
+            <Button variant="default" size="lg" className="mt-4 shadow-md hover:shadow-lg" onClick={handleNewAdventure}>
+              <ArrowLeft className="mr-2 h-5 w-5" /> Weave a New Adventure
+            </Button>
           </CardContent>
         </Card>
       )}
     </div>
   );
 }
-

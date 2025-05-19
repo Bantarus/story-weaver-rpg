@@ -2,7 +2,16 @@
 "use client";
 
 import type { ReactNode } from 'react';
-import { createContext, useContext, useState } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+
+// LocalStorage Keys
+const STORY_TEXT_KEY = 'storyWeaver_storyText';
+const CHARACTER_DESC_KEY = 'storyWeaver_characterDescription';
+const ANALYSIS_RESULT_KEY = 'storyWeaver_analysisResult';
+const NARRATIVE_OUTLINE_KEY = 'storyWeaver_narrativeOutline';
+const GAME_DATA_KEY = 'storyWeaver_gameData';
+const CURRENT_SCENE_ID_KEY = 'storyWeaver_currentSceneId';
+const CREATION_STEP_KEY = 'storyWeaver_creationStep';
 
 // Defines the structure of the game data JSON
 export interface GameData {
@@ -18,15 +27,16 @@ export interface SceneNode {
   choices: SceneChoice[];
   visualHint?: string;
   soundEffect?: string;
-  isEnding?: boolean; // Added based on user workflow and AI schema
-  endingType?: string; // Added based on user workflow and AI schema
+  isEnding?: boolean;
+  endingType?: string;
 }
 
 export interface SceneChoice {
   text: string;
   nextNodeId: string;
-  // effects?: string[]; // Future enhancement
 }
+
+type CreationStep = 'story' | 'character' | 'generate' | 'error';
 
 interface GameContextType {
   // Story and character data
@@ -34,7 +44,7 @@ interface GameContextType {
   setStoryText: (text: string | null) => void;
   characterDescription: string | null;
   setCharacterDescription: (desc: string | null) => void;
-  analysisResult: any | null; // Consider defining a type for AnalyzeSourceMaterialOutput
+  analysisResult: any | null; 
   setAnalysisResult: (result: any | null) => void;
   narrativeOutline: string | null;
   setNarrativeOutline: (outline: string | null) => void;
@@ -42,26 +52,107 @@ interface GameContextType {
   // Game data and state
   gameData: GameData | null;
   setGameData: (data: GameData | null) => void;
+  currentSceneId: string | null;
+  setCurrentSceneId: (id: string | null) => void;
+  
   isLoading: boolean;
   setIsLoading: (loading: boolean) => void;
   error: string | null;
   setError: (error: string | null) => void;
-  currentStep: 'story' | 'character' | 'generate' | 'error'; // currentStep on create page
-  setCurrentStep: (step: 'story' | 'character' | 'generate' | 'error') => void;
+  
+  creationStep: CreationStep; 
+  setCreationStep: (step: CreationStep) => void;
+
+  // Persistence functions
+  resetCreationProgress: () => void;
+  resetFullGame: () => void;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
 
 export const GameProvider = ({ children }: { children: ReactNode }) => {
-  const [storyText, setStoryText] = useState<string | null>(null);
-  const [characterDescription, setCharacterDescription] = useState<string | null>(null);
-  const [analysisResult, setAnalysisResult] = useState<any | null>(null);
-  const [narrativeOutline, setNarrativeOutline] = useState<string | null>(null);
-  const [gameData, setGameData] = useState<GameData | null>(null);
+  const [storyText, setStoryTextState] = useState<string | null>(null);
+  const [characterDescription, setCharacterDescriptionState] = useState<string | null>(null);
+  const [analysisResult, setAnalysisResultState] = useState<any | null>(null);
+  const [narrativeOutline, setNarrativeOutlineState] = useState<string | null>(null);
+  const [gameData, setGameDataState] = useState<GameData | null>(null);
+  const [currentSceneId, setCurrentSceneIdState] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [currentStep, setCurrentStep] = useState<'story' | 'character' | 'generate' | 'error'>('story');
+  const [creationStep, setCreationStepState] = useState<CreationStep>('story');
+  const [isLoaded, setIsLoaded] = useState(false);
 
+
+  // Load state from localStorage on initial mount
+  useEffect(() => {
+    const storedStoryText = localStorage.getItem(STORY_TEXT_KEY);
+    if (storedStoryText) setStoryTextState(storedStoryText);
+
+    const storedCharDesc = localStorage.getItem(CHARACTER_DESC_KEY);
+    if (storedCharDesc) setCharacterDescriptionState(storedCharDesc);
+
+    const storedAnalysis = localStorage.getItem(ANALYSIS_RESULT_KEY);
+    if (storedAnalysis) setAnalysisResultState(JSON.parse(storedAnalysis));
+    
+    const storedOutline = localStorage.getItem(NARRATIVE_OUTLINE_KEY);
+    if (storedOutline) setNarrativeOutlineState(storedOutline);
+
+    const storedGameData = localStorage.getItem(GAME_DATA_KEY);
+    if (storedGameData) setGameDataState(JSON.parse(storedGameData));
+
+    const storedSceneId = localStorage.getItem(CURRENT_SCENE_ID_KEY);
+    if (storedSceneId) setCurrentSceneIdState(storedSceneId);
+
+    const storedCreationStep = localStorage.getItem(CREATION_STEP_KEY);
+    if (storedCreationStep) setCreationStepState(storedCreationStep as CreationStep);
+    
+    setIsLoaded(true);
+  }, []);
+
+  // Save states to localStorage when they change
+  useEffect(() => { if (isLoaded) storyText ? localStorage.setItem(STORY_TEXT_KEY, storyText) : localStorage.removeItem(STORY_TEXT_KEY); }, [storyText, isLoaded]);
+  useEffect(() => { if (isLoaded) characterDescription ? localStorage.setItem(CHARACTER_DESC_KEY, characterDescription) : localStorage.removeItem(CHARACTER_DESC_KEY); }, [characterDescription, isLoaded]);
+  useEffect(() => { if (isLoaded) analysisResult ? localStorage.setItem(ANALYSIS_RESULT_KEY, JSON.stringify(analysisResult)) : localStorage.removeItem(ANALYSIS_RESULT_KEY); }, [analysisResult, isLoaded]);
+  useEffect(() => { if (isLoaded) narrativeOutline ? localStorage.setItem(NARRATIVE_OUTLINE_KEY, narrativeOutline) : localStorage.removeItem(NARRATIVE_OUTLINE_KEY); }, [narrativeOutline, isLoaded]);
+  useEffect(() => { if (isLoaded) gameData ? localStorage.setItem(GAME_DATA_KEY, JSON.stringify(gameData)) : localStorage.removeItem(GAME_DATA_KEY); }, [gameData, isLoaded]);
+  useEffect(() => { if (isLoaded) currentSceneId ? localStorage.setItem(CURRENT_SCENE_ID_KEY, currentSceneId) : localStorage.removeItem(CURRENT_SCENE_ID_KEY); }, [currentSceneId, isLoaded]);
+  useEffect(() => { if (isLoaded) localStorage.setItem(CREATION_STEP_KEY, creationStep); }, [creationStep, isLoaded]);
+
+  // Wrapped setters
+  const setStoryText = (text: string | null) => setStoryTextState(text);
+  const setCharacterDescription = (desc: string | null) => setCharacterDescriptionState(desc);
+  const setAnalysisResult = (result: any | null) => setAnalysisResultState(result);
+  const setNarrativeOutline = (outline: string | null) => setNarrativeOutlineState(outline);
+  const setGameData = (data: GameData | null) => setGameDataState(data);
+  const setCurrentSceneId = (id: string | null) => setCurrentSceneIdState(id);
+  const setCreationStep = (step: CreationStep) => setCreationStepState(step);
+
+  const resetCreationProgress = useCallback(() => {
+    setStoryTextState(null);
+    setCharacterDescriptionState(null);
+    setAnalysisResultState(null);
+    setNarrativeOutlineState(null);
+    setCreationStepState('story');
+    localStorage.removeItem(STORY_TEXT_KEY);
+    localStorage.removeItem(CHARACTER_DESC_KEY);
+    localStorage.removeItem(ANALYSIS_RESULT_KEY);
+    localStorage.removeItem(NARRATIVE_OUTLINE_KEY);
+    localStorage.setItem(CREATION_STEP_KEY, 'story'); // Reset step
+    setError(null); // Also clear any errors from creation
+  }, []);
+
+  const resetFullGame = useCallback(() => {
+    resetCreationProgress();
+    setGameDataState(null);
+    setCurrentSceneIdState(null);
+    localStorage.removeItem(GAME_DATA_KEY);
+    localStorage.removeItem(CURRENT_SCENE_ID_KEY);
+    setError(null); // Clear all errors
+  }, [resetCreationProgress]);
+
+  if (!isLoaded) {
+    return null; // Or a loading spinner, but for context, null is fine to prevent premature rendering
+  }
 
   return (
     <GameContext.Provider value={{ 
@@ -70,9 +161,12 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
       analysisResult, setAnalysisResult,
       narrativeOutline, setNarrativeOutline,
       gameData, setGameData, 
+      currentSceneId, setCurrentSceneId,
       isLoading, setIsLoading, 
       error, setError,
-      currentStep, setCurrentStep
+      creationStep, setCreationStep,
+      resetCreationProgress,
+      resetFullGame
     }}>
       {children}
     </GameContext.Provider>

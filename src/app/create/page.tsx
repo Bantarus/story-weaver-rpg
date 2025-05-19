@@ -17,12 +17,9 @@ import { useToast } from "@/hooks/use-toast";
 import { analyzeSourceMaterial } from "@/ai/flows/analyze-source-material";
 import { generateNarrativeOutline } from "@/ai/flows/generate-narrative-outline";
 import { formatGameDataJson, type FormatGameDataJsonOutput } from "@/ai/flows/format-game-data-json";
-import { mockGameData } from "@/lib/mock-game-data"; // Import mock data
-
-type CreateStep = "story" | "character" | "generate"; 
+import { mockGameData } from "@/lib/mock-game-data"; 
 
 // --- DEVELOPMENT FLAG ---
-// Set to true to use mock data for game generation, bypassing AI calls.
 const USE_MOCK_GENERATION = true; 
 // ------------------------
 
@@ -32,40 +29,80 @@ export default function CreatePage() {
   const {
     storyText, setStoryText,
     characterDescription, setCharacterDescription, 
-    analysisResult, setAnalysisResult, // analysisResult is kept for potential future display/use
+    analysisResult, setAnalysisResult, 
     narrativeOutline, setNarrativeOutline,
     setGameData,
     isLoading, setIsLoading,
     error, setError,
+    creationStep, setCreationStep,
+    resetCreationProgress
   } = useGame();
 
-  const [currentLocalStep, setCurrentLocalStep] = useState<CreateStep>("story");
-  const [charName, setCharName] = useState("");
-  const [charArchetype, setCharArchetype] = useState("");
-  const [charBackground, setCharBackground] = useState("");
-  const [charGoals, setCharGoals] = useState("");
+  // Local state for character form inputs, as these aren't directly in context until submitted
+  const [charName, setCharNameLocal] = useState(() => {
+    const cd = characterDescription;
+    if (!cd) return "";
+    const match = cd.match(/Name: (.*)/);
+    return match ? match[1] : "";
+  });
+  const [charArchetype, setCharArchetypeLocal] = useState(() => {
+    const cd = characterDescription;
+    if (!cd) return "";
+    const match = cd.match(/Archetype: (.*)/);
+    return match ? match[1] : "";
+  });
+  const [charBackground, setCharBackgroundLocal] = useState(() => {
+    const cd = characterDescription;
+    if (!cd) return "";
+    const match = cd.match(/Background: (.*)/);
+    return match ? match[1] : "";
+  });
+  const [charGoals, setCharGoalsLocal] = useState(() => {
+    const cd = characterDescription;
+    if (!cd) return "";
+    const match = cd.match(/Goals: (.*)/);
+    return match ? match[1] : "";
+  });
+
+  // Effect to re-populate local char fields if characterDescription changes in context
+  // (e.g. loaded from localStorage after initial render but before local state init finishes)
+  useEffect(() => {
+    if (characterDescription) {
+      const nameMatch = characterDescription.match(/Name: (.*)/);
+      if (nameMatch) setCharNameLocal(nameMatch[1]);
+      const archetypeMatch = characterDescription.match(/Archetype: (.*)/);
+      if (archetypeMatch) setCharArchetypeLocal(archetypeMatch[1]);
+      const backgroundMatch = characterDescription.match(/Background: (.*)/);
+      if (backgroundMatch) setCharBackgroundLocal(backgroundMatch[1]);
+      const goalsMatch = characterDescription.match(/Goals: (.*)/);
+      if (goalsMatch) setCharGoalsLocal(goalsMatch[1]);
+    }
+  }, [characterDescription]);
+
 
   const progressValue = {
     story: 0,
     character: 33,
     generate: 66,
-  }[currentLocalStep];
+    error: creationStep === 'story' ? 0 : creationStep === 'character' ? 33 : 66,
+  }[creationStep];
 
   useEffect(() => {
-    setError(null);
-  }, [currentLocalStep, setError]);
+    setError(null); // Clear error when step changes
+  }, [creationStep, setError]);
 
   const handleStorySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!storyText || storyText.trim().length < 50) {
       setError("Please provide a story text of at least 50 characters.");
       toast({ variant: "destructive", title: "Error", description: "Story text is too short." });
+      setCreationStep('error');
       return;
     }
     if (USE_MOCK_GENERATION) {
         setAnalysisResult({ plotPoints: "Mocked plot points.", characters: "Mocked characters.", settings: "Mocked settings.", themes: "Mocked themes.", tone: "Mocked tone."});
         toast({ title: "Mock Story Analysis Complete", description: "Proceed to character creation (using mock data).", className: "bg-blue-500 text-white" });
-        setCurrentLocalStep("character");
+        setCreationStep("character");
         return;
     }
     setIsLoading(true);
@@ -74,11 +111,12 @@ export default function CreatePage() {
       const result = await analyzeSourceMaterial({ storyText });
       setAnalysisResult(result);
       toast({ title: "Story Analysis Complete", description: "Proceed to character creation.", className: "bg-green-500 text-white" });
-      setCurrentLocalStep("character");
+      setCreationStep("character");
     } catch (err) {
       console.error("Error analyzing source material:", err);
       const errorMessage = err instanceof Error ? err.message : "An unknown error occurred during story analysis.";
       setError(errorMessage);
+      setCreationStep('error');
       toast({ variant: "destructive", title: "Analysis Failed", description: errorMessage });
     } finally {
       setIsLoading(false);
@@ -90,6 +128,7 @@ export default function CreatePage() {
     if (!charName.trim() || !charArchetype.trim() || !charBackground.trim() || !charGoals.trim()) {
       setError("Please fill in all character details.");
       toast({ variant: "destructive", title: "Error", description: "All character fields are required." });
+      setCreationStep('error');
       return;
     }
     const fullCharacterDescription = `Name: ${charName}\nArchetype: ${charArchetype}\nBackground: ${charBackground}\nGoals: ${charGoals}`;
@@ -98,7 +137,7 @@ export default function CreatePage() {
     if (USE_MOCK_GENERATION) {
         setNarrativeOutline("This is a mocked narrative outline based on your character and the mocked story analysis. It sets the stage for an exciting adventure!");
         toast({ title: "Mock Narrative Outline Generated", description: "Ready to generate the mock game data.", className: "bg-blue-500 text-white" });
-        setCurrentLocalStep("generate");
+        setCreationStep("generate");
         return;
     }
 
@@ -106,17 +145,17 @@ export default function CreatePage() {
     setError(null);
     try {
       if (!storyText) {
-        // Should be caught by USE_MOCK_GENERATION or previous step
-        throw new Error("Story text not found.");
+        throw new Error("Story text not found. Please go back to the story step.");
       }
       const result = await generateNarrativeOutline({ storyText, characterDescription: fullCharacterDescription });
       setNarrativeOutline(result.narrativeOutline);
       toast({ title: "Narrative Outline Generated", description: "Ready to generate the full game data.", className: "bg-green-500 text-white" });
-      setCurrentLocalStep("generate");
+      setCreationStep("generate");
     } catch (err) {
       console.error("Error generating narrative outline:", err);
       const errorMessage = err instanceof Error ? err.message : "An unknown error occurred during outline generation.";
       setError(errorMessage);
+      setCreationStep('error');
       toast({ variant: "destructive", title: "Outline Generation Failed", description: errorMessage });
     } finally {
       setIsLoading(false);
@@ -128,16 +167,16 @@ export default function CreatePage() {
     setError(null);
     try {
       if (USE_MOCK_GENERATION) {
-        setGameData(mockGameData as GameData); // Use the imported mock data
+        setGameData(mockGameData as GameData); 
         toast({ title: "Mock RPG Weaved!", description: "Your mock adventure is ready. Redirecting to game...", className: "bg-blue-500 text-white" });
+        resetCreationProgress(); // Clear creation inputs
         router.push("/play");
         return;
       }
 
       if (!narrativeOutline) { 
-        throw new Error("Narrative outline not found.");
+        throw new Error("Narrative outline not found. Please go back to the character step.");
       }
-      // formatGameDataJson now returns a structured object (FormatGameDataJsonOutput which is GameData)
       const gameDataResult: FormatGameDataJsonOutput = await formatGameDataJson({ narrativeOutline });
       
       if (!gameDataResult || !gameDataResult.scenes || !gameDataResult.startSceneId || Object.keys(gameDataResult.scenes).length === 0) {
@@ -146,6 +185,7 @@ export default function CreatePage() {
       
       setGameData(gameDataResult as GameData);
       toast({ title: "RPG Weaved!", description: "Your adventure is ready. Redirecting to game...", className: "bg-green-500 text-white" });
+      resetCreationProgress(); // Clear creation inputs
       router.push("/play");
     } catch (err) {
       console.error("Error formatting/generating game data:", err);
@@ -154,6 +194,7 @@ export default function CreatePage() {
         errorMessage = err.message;
       }
       setError(errorMessage);
+      setCreationStep('error');
       toast({ variant: "destructive", title: "Game Generation Failed", description: errorMessage });
     } finally {
       setIsLoading(false);
@@ -173,7 +214,7 @@ export default function CreatePage() {
         </Alert>
       )}
 
-      {error && (
+      {error && creationStep === 'error' && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Error</AlertTitle>
@@ -181,7 +222,7 @@ export default function CreatePage() {
         </Alert>
       )}
 
-      {currentLocalStep === "story" && (
+      {creationStep === "story" && (
         <Card className="shadow-lg">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-2xl"><BookText /> Step 1: Provide Your Story</CardTitle>
@@ -208,7 +249,7 @@ export default function CreatePage() {
         </Card>
       )}
 
-      {currentLocalStep === "character" && (
+      {creationStep === "character" && (
         <Card className="shadow-lg">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-2xl"><UserPlus /> Step 2: Define Your Character</CardTitle>
@@ -218,23 +259,23 @@ export default function CreatePage() {
             <CardContent className="space-y-4">
               <div>
                 <Label htmlFor="charName">Character Name</Label>
-                <Input id="charName" value={charName} onChange={(e) => setCharName(e.target.value)} placeholder="e.g., Elara Meadowlight" disabled={isLoading} />
+                <Input id="charName" value={charName} onChange={(e) => setCharNameLocal(e.target.value)} placeholder="e.g., Elara Meadowlight" disabled={isLoading} />
               </div>
               <div>
                 <Label htmlFor="charArchetype">Archetype/Class</Label>
-                <Input id="charArchetype" value={charArchetype} onChange={(e) => setCharArchetype(e.target.value)} placeholder="e.g., Wandering Scholar, Cursed Knight" disabled={isLoading} />
+                <Input id="charArchetype" value={charArchetype} onChange={(e) => setCharArchetypeLocal(e.target.value)} placeholder="e.g., Wandering Scholar, Cursed Knight" disabled={isLoading} />
               </div>
               <div>
                 <Label htmlFor="charBackground">Background Story</Label>
-                <Textarea id="charBackground" value={charBackground} onChange={(e) => setCharBackground(e.target.value)} placeholder="A brief history of your character..." rows={3} disabled={isLoading} />
+                <Textarea id="charBackground" value={charBackground} onChange={(e) => setCharBackgroundLocal(e.target.value)} placeholder="A brief history of your character..." rows={3} disabled={isLoading} />
               </div>
               <div>
                 <Label htmlFor="charGoals">Personal Goals</Label>
-                <Textarea id="charGoals" value={charGoals} onChange={(e) => setCharGoals(e.target.value)} placeholder="What does your character hope to achieve?" rows={3} disabled={isLoading} />
+                <Textarea id="charGoals" value={charGoals} onChange={(e) => setCharGoalsLocal(e.target.value)} placeholder="What does your character hope to achieve?" rows={3} disabled={isLoading} />
               </div>
             </CardContent>
             <CardFooter className="flex justify-between">
-              <Button variant="outline" onClick={() => setCurrentLocalStep("story")} disabled={isLoading}>Back to Story</Button>
+              <Button variant="outline" onClick={() => setCreationStep("story")} disabled={isLoading}>Back to Story</Button>
               <Button type="submit" disabled={isLoading || !charName || !charArchetype || !charBackground || !charGoals } className="w-1/2">
                 {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
                 {USE_MOCK_GENERATION ? "Craft Character & Get Mock Outline" : "Craft Character & Get Outline"}
@@ -244,7 +285,7 @@ export default function CreatePage() {
         </Card>
       )}
       
-      {currentLocalStep === "generate" && narrativeOutline && (
+      {creationStep === "generate" && narrativeOutline && (
         <Card className="shadow-lg">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-2xl"><CheckCircle className="text-green-500" /> Step 3: Weave Your RPG</CardTitle>
@@ -262,7 +303,7 @@ export default function CreatePage() {
             <Textarea value={narrativeOutline.substring(0, 300) + (narrativeOutline.length > 300 ? "..." : "")} readOnly rows={5} className="bg-muted/50" />
           </CardContent>
           <CardFooter className="flex justify-between">
-            <Button variant="outline" onClick={() => setCurrentLocalStep("character")} disabled={isLoading}>Back to Character</Button>
+            <Button variant="outline" onClick={() => setCreationStep("character")} disabled={isLoading}>Back to Character</Button>
             <Button onClick={handleGenerateGame} disabled={isLoading} className="w-1/2">
               {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
               {USE_MOCK_GENERATION ? "Weave Mock RPG!" : "Weave Your RPG!"}
