@@ -12,6 +12,7 @@ const NARRATIVE_OUTLINE_KEY = 'storyWeaver_narrativeOutline';
 const GAME_DATA_KEY = 'storyWeaver_gameData';
 const CURRENT_SCENE_ID_KEY = 'storyWeaver_currentSceneId';
 const CREATION_STEP_KEY = 'storyWeaver_creationStep';
+const GAME_HISTORY_KEY = 'storyWeaver_gameHistory'; // New key for game history
 
 // Defines the structure of the game data JSON
 export interface GameData {
@@ -54,6 +55,7 @@ interface GameContextType {
   setGameData: (data: GameData | null) => void;
   currentSceneId: string | null;
   setCurrentSceneId: (id: string | null) => void;
+  gameHistory: string[]; // Added gameHistory
   
   isLoading: boolean;
   setIsLoading: (loading: boolean) => void;
@@ -77,6 +79,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
   const [narrativeOutline, setNarrativeOutlineState] = useState<string | null>(null);
   const [gameData, setGameDataState] = useState<GameData | null>(null);
   const [currentSceneId, setCurrentSceneIdState] = useState<string | null>(null);
+  const [gameHistory, setGameHistoryState] = useState<string[]>([]); // Game history state
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [creationStep, setCreationStepState] = useState<CreationStep>('story');
@@ -105,9 +108,23 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
 
     const storedCreationStep = localStorage.getItem(CREATION_STEP_KEY);
     if (storedCreationStep) setCreationStepState(storedCreationStep as CreationStep);
+
+    const storedGameHistory = localStorage.getItem(GAME_HISTORY_KEY);
+    if (storedGameHistory) setGameHistoryState(JSON.parse(storedGameHistory));
     
     setIsLoaded(true);
   }, []);
+
+  // Initialize history when gameData is first available and no history exists yet (for a new game)
+  // Or if gameData is loaded and currentSceneId is startSceneId, but history is still empty (resuming a fresh game)
+  useEffect(() => {
+    if (isLoaded && gameData && gameData.startSceneId) {
+      if (currentSceneId === gameData.startSceneId && gameHistory.length === 0) {
+        setGameHistoryState([gameData.startSceneId]);
+      }
+    }
+  }, [gameData, currentSceneId, gameHistory.length, isLoaded]);
+
 
   // Save states to localStorage when they change
   useEffect(() => { if (isLoaded) storyText ? localStorage.setItem(STORY_TEXT_KEY, storyText) : localStorage.removeItem(STORY_TEXT_KEY); }, [storyText, isLoaded]);
@@ -117,14 +134,42 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => { if (isLoaded) gameData ? localStorage.setItem(GAME_DATA_KEY, JSON.stringify(gameData)) : localStorage.removeItem(GAME_DATA_KEY); }, [gameData, isLoaded]);
   useEffect(() => { if (isLoaded) currentSceneId ? localStorage.setItem(CURRENT_SCENE_ID_KEY, currentSceneId) : localStorage.removeItem(CURRENT_SCENE_ID_KEY); }, [currentSceneId, isLoaded]);
   useEffect(() => { if (isLoaded) localStorage.setItem(CREATION_STEP_KEY, creationStep); }, [creationStep, isLoaded]);
+  useEffect(() => { if (isLoaded) gameHistory.length > 0 ? localStorage.setItem(GAME_HISTORY_KEY, JSON.stringify(gameHistory)) : localStorage.removeItem(GAME_HISTORY_KEY); }, [gameHistory, isLoaded]);
+
 
   // Wrapped setters
   const setStoryText = (text: string | null) => setStoryTextState(text);
   const setCharacterDescription = (desc: string | null) => setCharacterDescriptionState(desc);
   const setAnalysisResult = (result: any | null) => setAnalysisResultState(result);
   const setNarrativeOutline = (outline: string | null) => setNarrativeOutlineState(outline);
-  const setGameData = (data: GameData | null) => setGameDataState(data);
-  const setCurrentSceneId = (id: string | null) => setCurrentSceneIdState(id);
+  const setGameData = (data: GameData | null) => {
+    setGameDataState(data);
+    // If setting new game data, reset history and initialize with start scene
+    if (data && data.startSceneId) {
+      setCurrentSceneIdState(data.startSceneId); // Also set current scene to start
+      setGameHistoryState([data.startSceneId]);
+    } else if (!data) {
+      setGameHistoryState([]); // Clear history if game data is removed
+    }
+  };
+
+  const setCurrentSceneId = (id: string | null) => {
+    setCurrentSceneIdState(id);
+    if (id) { // Only add to history if it's a valid scene ID
+      setGameHistoryState(prevHistory => {
+        // Ensure history is initialized if it's somehow empty (e.g., first load or after reset)
+        if (prevHistory.length === 0 && gameData && id === gameData.startSceneId) {
+          return [id];
+        }
+        // Add to history if it's a new scene ID and different from the last one
+        if (prevHistory.length > 0 && prevHistory[prevHistory.length - 1] !== id) {
+          return [...prevHistory, id];
+        }
+        // If history is empty and it's not the start scene, or if ID is same as last, return current history
+        return prevHistory;
+      });
+    }
+  };
   const setCreationStep = (step: CreationStep) => setCreationStepState(step);
 
   const resetCreationProgress = useCallback(() => {
@@ -137,21 +182,23 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
     localStorage.removeItem(CHARACTER_DESC_KEY);
     localStorage.removeItem(ANALYSIS_RESULT_KEY);
     localStorage.removeItem(NARRATIVE_OUTLINE_KEY);
-    localStorage.setItem(CREATION_STEP_KEY, 'story'); // Reset step
-    setError(null); // Also clear any errors from creation
+    localStorage.setItem(CREATION_STEP_KEY, 'story'); 
+    setError(null); 
   }, []);
 
   const resetFullGame = useCallback(() => {
     resetCreationProgress();
     setGameDataState(null);
     setCurrentSceneIdState(null);
+    setGameHistoryState([]); // Clear history state
     localStorage.removeItem(GAME_DATA_KEY);
     localStorage.removeItem(CURRENT_SCENE_ID_KEY);
-    setError(null); // Clear all errors
+    localStorage.removeItem(GAME_HISTORY_KEY); // Clear history from localStorage
+    setError(null); 
   }, [resetCreationProgress]);
 
   if (!isLoaded) {
-    return null; // Or a loading spinner, but for context, null is fine to prevent premature rendering
+    return null; 
   }
 
   return (
@@ -162,6 +209,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
       narrativeOutline, setNarrativeOutline,
       gameData, setGameData, 
       currentSceneId, setCurrentSceneId,
+      gameHistory, // Expose gameHistory
       isLoading, setIsLoading, 
       error, setError,
       creationStep, setCreationStep,
