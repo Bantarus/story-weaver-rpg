@@ -181,7 +181,7 @@ export default function CreatePage() {
       let finalGameDataToSet: GameData | null = null;
 
       if (USE_MOCK_GENERATION) {
-        finalGameDataToSet = mockGameData as GameData; // Use the imported mock data
+        finalGameDataToSet = mockGameData as GameData; 
         toast({ title: "Mock RPG Weaved!", description: "Your mock adventure is ready to play or save.", className: "bg-primary text-primary-foreground" });
       } else {
         if (!narrativeOutline) { 
@@ -247,28 +247,52 @@ export default function CreatePage() {
   };
 
   const handleSaveAdventureClick = useCallback(() => {
+    console.log("handleSaveAdventureClick: Function called.");
     if (!gameData) {
       toast({ variant: "destructive", title: "Cannot Save", description: "No game data available to save." });
+      console.error("handleSaveAdventureClick: Aborted - No gameData.");
       return;
     }
+    console.log("handleSaveAdventureClick: gameData is present. Current gameData.title:", gameData.title, "gameData.adventureName:", gameData.adventureName);
 
     // Defer the prompt slightly.
     setTimeout(() => {
+      console.log("handleSaveAdventureClick: setTimeout callback executed.");
       const defaultName = gameData.adventureName || gameData.title || "My Awesome Adventure";
-      const adventureName = window.prompt("Enter a name for your adventure:", defaultName);
+      console.log("handleSaveAdventureClick: Default name for prompt will be:", defaultName);
+
+      let adventureName: string | null = null;
+      try {
+        // Add a try-catch specifically around the prompt in case it throws an error in some environments
+        adventureName = window.prompt("Enter a name for your adventure:", defaultName);
+        console.log("handleSaveAdventureClick: window.prompt call completed. Returned value:", adventureName);
+      } catch (promptError) {
+        console.error("handleSaveAdventureClick: An error occurred during window.prompt execution:", promptError);
+        toast({ variant: "destructive", title: "Dialog Error", description: "Could not display the save name dialog." });
+        return;
+      }
 
       if (adventureName && adventureName.trim() !== "") {
+        console.log(`handleSaveAdventureClick: Attempting to save with name: "${adventureName.trim()}"`);
         if (saveAdventureToLibrary(adventureName.trim())) {
           toast({ title: "Adventure Saved!", description: `"${adventureName.trim()}" has been saved to your library.`, className: "bg-primary text-primary-foreground" });
+          console.log("handleSaveAdventureClick: Save successful.");
         } else {
-          toast({ variant: "destructive", title: "Save Failed", description: "Could not save the adventure. Ensure game data is present." });
+          // This case should be rare if gameData was present at the start
+          toast({ variant: "destructive", title: "Save Failed", description: "Could not save the adventure. Game data might be missing (unexpected)." });
+          console.error("handleSaveAdventureClick: saveAdventureToLibrary returned false.");
         }
       } else if (adventureName === "") { // User clicked OK but left the name blank
           toast({ variant: "destructive", title: "Save Cancelled", description: "Adventure name cannot be empty." });
-      } else if (adventureName === null) { // User clicked Cancel (prompt returned null)
+          console.log("handleSaveAdventureClick: Save cancelled - adventureName was empty string.");
+      } else if (adventureName === null) { // User clicked Cancel or prompt was dismissed/returned null
         toast({ title: "Save Cancelled", description: "Adventure was not saved." });
+        console.log("handleSaveAdventureClick: Save cancelled - adventureName was null.");
+      } else {
+        // Fallback for any unexpected state of adventureName
+        console.warn("handleSaveAdventureClick: Unexpected adventureName value after prompt:", adventureName);
+        toast({ title: "Save Cancelled", description: "An unexpected issue occurred determining the adventure name." });
       }
-      // No explicit toast if adventureName is undefined, though window.prompt shouldn't return undefined.
     }, 0);
   }, [gameData, saveAdventureToLibrary, toast]);
   
@@ -495,7 +519,6 @@ export default function CreatePage() {
                 <Button onClick={handleSaveAdventureClick} variant={isCurrentAdventureSaved ? "secondary" : "default"} className="w-full sm:w-auto" disabled={isLoading}>
                   {isCurrentAdventureSaved ? <CheckCircle className="mr-2 h-4 w-4" /> : <Save className="mr-2 h-4 w-4" />}
                   {isCurrentAdventureSaved ? "Saved to Library" : "Save to Library"}
-                  {/* Future: Add hint for plan limits */}
                 </Button>
                 <Button onClick={handlePlayNowClick} className="w-full sm:w-auto bg-primary hover:bg-primary/90" disabled={isLoading}>
                   <Play className="mr-2 h-4 w-4" /> Play Now
@@ -508,6 +531,5 @@ export default function CreatePage() {
     </div>
   );
 }
-
       
-
+        
