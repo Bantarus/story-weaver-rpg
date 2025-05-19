@@ -9,12 +9,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Loader2, AlertCircle, ArrowLeft, Compass, Eye, Ear } from "lucide-react";
 import Link from "next/link";
+import { GameHistoryDisplay } from "@/components/GameHistoryDisplay"; // Import the new component
 
 export default function PlayPage() {
   const router = useRouter();
   const { 
     gameData, 
     currentSceneId, setCurrentSceneId,
+    gameHistory, // Get gameHistory from context
     isLoading: contextIsLoading, 
     error: contextError,
     resetFullGame 
@@ -26,12 +28,9 @@ export default function PlayPage() {
   // Effect to handle initial load or if gameData becomes unavailable
   useEffect(() => {
     if (!contextIsLoading && !gameData) {
-      // If no game data and not loading, redirect to create.
-      // This can happen if user lands here directly or clears storage and refreshes.
-      resetFullGame(); // Ensure a clean slate if redirecting
+      resetFullGame(); 
       router.replace("/create");
     } else if (gameData && !currentSceneId) {
-      // Game data exists, but no current scene ID (e.g., new game loaded)
       setCurrentSceneId(gameData.startSceneId);
     }
   }, [gameData, contextIsLoading, currentSceneId, router, setCurrentSceneId, resetFullGame]);
@@ -48,7 +47,6 @@ export default function PlayPage() {
     } else if (gameData && currentSceneId && !gameData.scenes[currentSceneId]) {
       setCurrentScene(null); 
       console.error(`Scene with ID "${currentSceneId}" not found in game data. Resetting to start scene.`);
-      // Attempt to reset to start scene if current is invalid
       setCurrentSceneId(gameData.startSceneId); 
     }
   }, [gameData, currentSceneId, setCurrentSceneId]);
@@ -58,7 +56,6 @@ export default function PlayPage() {
       setCurrentSceneId(choice.nextNodeId);
     } else {
       console.error(`Next scene ID "${choice.nextNodeId}" not found. Staying in current scene or handling error.`);
-      // Optionally, set an error state or navigate to a generic error scene
     }
   };
 
@@ -67,7 +64,7 @@ export default function PlayPage() {
     router.push("/create");
   };
 
-  if (contextIsLoading || !gameData && !contextError) { // Show loading if context is loading OR if gameData isn't ready yet (and no error)
+  if (contextIsLoading || !gameData && !contextError) { 
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-200px)]">
         <Loader2 className="h-16 w-16 animate-spin text-primary mb-4" />
@@ -94,7 +91,6 @@ export default function PlayPage() {
     );
   }
   
-  // This check should ideally not be hit if the useEffect for initial load is working correctly
   if (!gameData || !currentSceneId) {
      return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-200px)]">
@@ -192,11 +188,21 @@ export default function PlayPage() {
               {currentScene.endingType ? `An Ending: ${currentScene.endingType.replace(/_/g, ' ')}` : "The Path Closes"}
             </CardTitle>
           </CardHeader>
-          <CardContent className="p-6 text-center space-y-4">
+          <CardContent className="p-6 text-center space-y-4"> {/* Reduced space-y from 6 to 4 to make room for history */}
             <p className="text-muted-foreground text-lg">
               {currentScene.endingType ? "Your journey has reached a conclusion." : "The story pauses here, its next chapter unwritten."}
             </p>
-            <Button variant="default" size="lg" className="mt-4 shadow-md hover:shadow-lg" onClick={handleNewAdventure}>
+            
+            {/* Game History Display */}
+            {gameData && gameData.scenes && gameHistory.length > 0 && (
+              <GameHistoryDisplay 
+                gameHistory={gameHistory} 
+                scenes={gameData.scenes} 
+                currentSceneId={currentSceneId}
+              />
+            )}
+
+            <Button variant="default" size="lg" className="shadow-md hover:shadow-lg" onClick={handleNewAdventure}>
               <ArrowLeft className="mr-2 h-5 w-5" /> Weave a New Adventure
             </Button>
           </CardContent>
