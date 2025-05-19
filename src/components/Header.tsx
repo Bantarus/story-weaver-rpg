@@ -1,19 +1,20 @@
 
-"use client"; // Add "use client" if using hooks like useGame
+"use client"; 
 
 import Link from 'next/link';
-import { BookOpenText } from 'lucide-react';
-import { useGame } from '@/context/GameContext'; // Import useGame hook
+import { BookOpenText, Library } from 'lucide-react';
+import { useGame } from '@/context/GameContext'; 
 import { useRouter } from 'next/navigation';
+import { Button } from '@/components/ui/button'; // For consistent styling if needed
 
 export function Header() {
   const { resetFullGame } = useGame();
   const router = useRouter();
 
   const handleCreateNewRPG = (e: React.MouseEvent<HTMLAnchorElement>) => {
-    e.preventDefault(); // Prevent default link behavior
-    resetFullGame();    // Clear all game state
-    router.push('/create'); // Navigate to create page
+    e.preventDefault(); 
+    resetFullGame();    
+    router.push('/create'); 
   };
 
   return (
@@ -23,15 +24,20 @@ export function Header() {
           <BookOpenText size={28} />
           <span>Story Weaver RPG</span>
         </Link>
-        <nav className="flex items-center gap-4">
+        <nav className="flex items-center gap-2 sm:gap-4">
+          <Link 
+            href="/library" 
+            className="text-sm font-medium text-foreground hover:text-primary transition-colors px-3 py-2 rounded-md hover:bg-muted/50 flex items-center gap-1.5"
+          >
+            <Library size={16} /> My Library
+          </Link>
           <Link 
             href="/create" 
             onClick={handleCreateNewRPG} 
-            className="text-sm font-medium text-foreground hover:text-primary transition-colors"
+            className="text-sm font-medium text-foreground hover:text-primary transition-colors px-3 py-2 rounded-md hover:bg-muted/50"
           >
             Create New RPG
           </Link>
-          {/* Add other navigation links if needed */}
         </nav>
       </div>
     </header>
