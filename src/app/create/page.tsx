@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useGame, type GameData } from "@/context/GameContext"; 
+import { useGame, type GameData, type SceneNode } from "@/context/GameContext"; 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,7 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 
 import { analyzeSourceMaterial } from "@/ai/flows/analyze-source-material";
 import { generateNarrativeOutline } from "@/ai/flows/generate-narrative-outline";
-import { formatGameDataJson, type FormatGameDataJsonOutput } from "@/ai/flows/format-game-data-json";
+import { formatGameDataJson, type FormatGameDataJsonOutput, type AISceneNode } from "@/ai/flows/format-game-data-json";
 import { mockGameData } from "@/lib/mock-game-data"; 
 
 // --- DEVELOPMENT FLAG ---
@@ -177,16 +177,53 @@ export default function CreatePage() {
       if (!narrativeOutline) { 
         throw new Error("Narrative outline not found. Please go back to the character step.");
       }
-      const gameDataResult: FormatGameDataJsonOutput = await formatGameDataJson({ narrativeOutline });
+      // aiFormattedGameData will have 'scenes' as an array of AISceneNode
+      const aiFormattedGameData: FormatGameDataJsonOutput = await formatGameDataJson({ narrativeOutline });
       
-      if (!gameDataResult || !gameDataResult.scenes || !gameDataResult.startSceneId || Object.keys(gameDataResult.scenes).length === 0) {
-        throw new Error("Received incomplete or invalid game data from AI.");
+      if (!aiFormattedGameData || !aiFormattedGameData.scenes || !aiFormattedGameData.startSceneId || aiFormattedGameData.scenes.length === 0) {
+        throw new Error("Received incomplete or invalid game data structure from AI.");
       }
+
+      // Transform scenes array to Record<string, SceneNode> for GameContext
+      const scenesRecord: Record<string, SceneNode> = {};
+      aiFormattedGameData.scenes.forEach((aiScene: AISceneNode) => {
+        // Map AISceneNode to SceneNode (application's internal type)
+        // Handle potential undefined fields from AI default empty strings
+        scenesRecord[aiScene.id] = {
+          id: aiScene.id,
+          title: aiScene.title && aiScene.title.trim() !== "" ? aiScene.title.trim() : undefined,
+          text: aiScene.text,
+          choices: aiScene.choices, // Assuming SceneChoice and AIChoice are compatible enough
+          isEnding: aiScene.isEnding,
+          endingType: aiScene.endingType && aiScene.endingType.trim() !== "" && aiScene.endingType.trim().toLowerCase() !== "none" ? aiScene.endingType.trim() : undefined,
+          visualHint: aiScene.visualHint && aiScene.visualHint.trim() !== "" ? aiScene.visualHint.trim() : undefined,
+          soundEffect: aiScene.soundEffect && aiScene.soundEffect.trim() !== "" ? aiScene.soundEffect.trim() : undefined,
+        };
+      });
       
-      setGameData(gameDataResult as GameData);
+      // Ensure startSceneId is valid within the newly created scenesRecord
+      let finalStartSceneId = aiFormattedGameData.startSceneId;
+      if (!scenesRecord[finalStartSceneId]) {
+        const availableSceneIds = Object.keys(scenesRecord);
+        if (availableSceneIds.length > 0) {
+          console.warn(`AI-generated startSceneId '${finalStartSceneId}' not found in processed scenes. Defaulting to first available scene: ${availableSceneIds[0]}`);
+          finalStartSceneId = availableSceneIds[0];
+        } else {
+          throw new Error('AI generated game data with no processable scenes.');
+        }
+      }
+
+      const finalGameData: GameData = {
+        title: aiFormattedGameData.title && aiFormattedGameData.title.trim() !== "" ? aiFormattedGameData.title.trim() : undefined,
+        startSceneId: finalStartSceneId,
+        scenes: scenesRecord,
+      };
+      
+      setGameData(finalGameData);
       toast({ title: "RPG Weaved!", description: "Your adventure is ready. Redirecting to game...", className: "bg-green-500 text-white" });
       resetCreationProgress(); // Clear creation inputs
       router.push("/play");
+
     } catch (err) {
       console.error("Error formatting/generating game data:", err);
       let errorMessage = "An unknown error occurred during game generation.";
@@ -219,6 +256,7 @@ export default function CreatePage() {
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Error</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
+          <Button onClick={() => setCreationStep('story')} variant="outline" className="mt-2">Try Again</Button>
         </Alert>
       )}
 
@@ -314,5 +352,3 @@ export default function CreatePage() {
     </div>
   );
 }
-
-    
