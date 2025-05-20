@@ -46,7 +46,7 @@ export default function CreatePage() {
     isAdventureInLibrary,
     savedCharacters,
     saveCharacterProfile,
-    deleteCharacterProfile, // Will add UI for this later if needed
+    deleteCharacterProfile, 
     getCharacterProfileById
   } = useGame();
 
@@ -56,12 +56,12 @@ export default function CreatePage() {
   const [charBackground, setCharBackgroundLocal] = useState("");
   const [charGoals, setCharGoalsLocal] = useState("");
   
-  const [loadedCharId, setLoadedCharId] = useState<string | null>(null); // Tracks ID of character loaded from library
+  const [loadedCharId, setLoadedCharId] = useState<string | null>(null); 
   const [selectedLibraryCharId, setSelectedLibraryCharId] = useState<string | undefined>(undefined);
 
 
   useEffect(() => {
-    // Only parse characterDescription if on character step and it exists, and no character is currently "loaded" from library
+    // Only parse characterDescription if on character step, it exists, AND no character is currently "loaded" from library
     if (characterDescription && creationStep === 'character' && !loadedCharId) { 
       const nameMatch = characterDescription.match(/Name: (.*?)(?:\nArchetype:|\nBackground:|\nGoals:|$)/s);
       if (nameMatch) setCharNameLocal(nameMatch[1].trim()); else setCharNameLocal("");
@@ -133,7 +133,7 @@ export default function CreatePage() {
       return;
     }
     const fullCharacterDescription = `Name: ${charName.trim()}\nArchetype: ${charArchetype.trim()}\nBackground: ${charBackground.trim()}\nGoals: ${charGoals.trim()}`;
-    setCharacterDescription(fullCharacterDescription); // Update context with combined description
+    setCharacterDescription(fullCharacterDescription); 
 
     if (USE_MOCK_GENERATION) {
         setNarrativeOutline("This is a mocked narrative outline based on your character and the mocked story analysis. It sets the stage for an exciting adventure!");
@@ -179,7 +179,7 @@ export default function CreatePage() {
       let finalGameDataToSet: GameData | null = null;
 
       if (USE_MOCK_GENERATION) {
-        finalGameDataToSet = mockGameData as GameData; // Use mock data
+        finalGameDataToSet = mockGameData as GameData; 
         toast({ title: "Mock RPG Weaved!", description: "Your mock adventure is ready to play or save.", className: "bg-primary text-primary-foreground" });
       } else {
         if (!narrativeOutline) {
@@ -190,16 +190,13 @@ export default function CreatePage() {
           return;
         }
 
-        // Call the AI flow to get structured data
         const aiFormattedOutput: FormatGameDataJsonOutput = await formatGameDataJson({ narrativeOutline });
         
-        // Validate basic structure from AI
         if (!aiFormattedOutput || !aiFormattedOutput.scenes || !aiFormattedOutput.startSceneId || aiFormattedOutput.scenes.length === 0) {
             console.error("AI output structure error:", aiFormattedOutput);
             throw new Error("Received incomplete or invalid game data structure from AI. Check console for details.");
         }
 
-        // Transform AI's scene array into a Record<string, SceneNode> for GameContext
         const scenesRecord: Record<string, SceneNode> = {};
         aiFormattedOutput.scenes.forEach((aiScene: AISceneNode) => {
           scenesRecord[aiScene.id] = {
@@ -240,7 +237,7 @@ export default function CreatePage() {
         toast({ title: "RPG Weaved!", description: "Your adventure is ready to play or save.", className: "bg-primary text-primary-foreground" });
       }
       
-      setGameData(finalGameDataToSet); // This will now keep user on 'generate' step
+      setGameData(finalGameDataToSet); 
 
     } catch (err) {
       console.error("Error formatting/generating game data:", err);
@@ -285,7 +282,7 @@ export default function CreatePage() {
             toast({ title: "Save Cancelled", description: "Adventure was not saved." });
         } else if (adventureName.trim() === "") {
             console.log("Prompt returned empty string.");
-            toast({ variant: "destructive", title: "Save Cancelled", description: "Adventure name cannot be empty." });
+            toast({ variant: "destructive", title: "Save Cancelled", description: "Adventure name cannot be empty. Please provide a valid name." });
         } else {
             console.log("Attempting to save with name:", adventureName.trim());
             if (saveAdventureToLibrary(adventureName.trim())) {
@@ -304,18 +301,17 @@ export default function CreatePage() {
       setCreationStep('error');
       return;
     }
-    resetCreationProgress(); // Clear story/char inputs, now that game is generated and about to be played
+    resetCreationProgress(); 
     router.push("/play");
   };
 
   const handleTryAgainOnError = () => {
     setError(null);
-    // Go back to the last valid step before the error
-    if (narrativeOutline) { // Error likely occurred during formatGameDataJson
+    if (narrativeOutline) { 
         setCreationStep('generate');
-    } else if (analysisResult) { // Error likely occurred during generateNarrativeOutline
+    } else if (analysisResult) { 
         setCreationStep('character');
-    } else { // Error likely occurred during analyzeSourceMaterial or story input
+    } else { 
         setCreationStep('story');
     }
   };
@@ -331,8 +327,7 @@ export default function CreatePage() {
       setCharArchetypeLocal(charProfile.archetype);
       setCharBackgroundLocal(charProfile.background);
       setCharGoalsLocal(charProfile.goals);
-      setLoadedCharId(charProfile.id); // Track that this character is loaded
-      // Update the main characterDescription in context as well
+      setLoadedCharId(charProfile.id); 
       const fullDesc = `Name: ${charProfile.name}\nArchetype: ${charProfile.archetype}\nBackground: ${charProfile.background}\nGoals: ${charProfile.goals}`;
       setCharacterDescription(fullDesc);
       toast({ title: "Character Loaded", description: `"${charProfile.name}" has been loaded into the form.`, className: "bg-primary text-primary-foreground" });
@@ -347,18 +342,17 @@ export default function CreatePage() {
       return;
     }
     const characterDataToSave: Omit<CharacterProfile, 'id'> & { id?: string } = {
-      id: loadedCharId || undefined, // Pass ID if we are updating a loaded character
+      id: loadedCharId || undefined, 
       name: charName.trim(),
       archetype: charArchetype.trim(),
       background: charBackground.trim(),
       goals: charGoals.trim(),
     };
     const savedProfile = saveCharacterProfile(characterDataToSave);
-    setLoadedCharId(savedProfile.id); // Ensure loadedCharId is updated if it was a new save
+    setLoadedCharId(savedProfile.id); 
     toast({ title: "Character Saved!", description: `"${savedProfile.name}" has been saved to your library.`, className: "bg-primary text-primary-foreground" });
   };
   
-  // Determine state of "Save Character" button
   let saveCharButtonText = "Save Current Character to Library";
   let isCurrentCharSaved = false;
   if (loadedCharId) {
@@ -373,18 +367,16 @@ export default function CreatePage() {
     } else {
       saveCharButtonText = "Update Character in Library";
     }
-  } else if (savedCharacters.some(c => 
+  } else if (charName.trim() && charArchetype.trim() && charBackground.trim() && charGoals.trim() && savedCharacters.some(c => 
       c.name === charName.trim() && 
       c.archetype === charArchetype.trim() &&
       c.background === charBackground.trim() &&
-      c.goals === charGoals.trim() &&
-      charName.trim() !== "" // only if form is filled
+      c.goals === charGoals.trim()
     )) {
-      // If not loaded, but current form data matches an existing character
-      // This scenario is less common if we reset loadedCharId on change.
-      // For now, this primarily triggers if fields are identical to one in library but not "loaded"
-      // saveCharButtonText = "Character Exists in Library"; 
-      // isCurrentCharSaved = true; // Better to let user save again to get a new ID if they want a duplicate
+      // Scenario: Form matches an existing character in library, but it wasn't explicitly loaded.
+      // To avoid confusion, we'll consider it a new save unless it's actively loaded.
+      // We can let the user save it again, and saveCharacterProfile will assign a new ID if no ID is passed.
+      // Or, if they selected that character from the dropdown, loadedCharId would be set.
   }
 
 
@@ -490,13 +482,12 @@ export default function CreatePage() {
                     type="button" 
                     variant={isCurrentCharSaved ? "secondary" : "outline"}
                     onClick={handleSaveCurrentCharacterToLibrary} 
-                    disabled={isLoading || !charName.trim() || !charArchetype.trim() || isCurrentCharSaved}
+                    disabled={isLoading || !charName.trim() || !charArchetype.trim() || !charBackground.trim() || !charGoals.trim() || isCurrentCharSaved}
                     className="w-full"
                   >
                     <Save className="mr-2 h-4 w-4" /> 
                     {saveCharButtonText}
                   </Button>
-                  {/* Future: Button to delete selectedLibraryCharId if loaded and confirmed */}
                 </CardContent>
               </Card>
 
@@ -518,7 +509,6 @@ export default function CreatePage() {
                 <Textarea id="charGoals" value={charGoals} onChange={(e) => {setCharGoalsLocal(e.target.value); setLoadedCharId(null);}} placeholder="What does your character hope to achieve?" rows={3} disabled={isLoading} />
               </div>
 
-              {/* Advanced Generation Section */}
               <Card className="pt-4 bg-muted/30 border-dashed">
                 <CardHeader className="pt-0 pb-2">
                   <CardTitle className="text-xl flex items-center gap-2"><Sparkles className="text-primary"/> Advanced Generation (Optional)</CardTitle>
