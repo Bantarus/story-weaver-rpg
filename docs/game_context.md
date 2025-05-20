@@ -1,3 +1,4 @@
+
 # Game Context & Settings Context
 
 The application uses React Context for global state management.
@@ -22,8 +23,9 @@ The `GameContext` (defined in `src/context/GameContext.tsx`) is the central hub 
     -   `desiredTone`: User's preference for narrative tone.
     -   `desiredLength`: User's preference for narrative length/complexity.
     -   `keyThemes`: User's preference for themes to emphasize.
+    -   `adventureLanguage`: The language selected by the user for AI generation (e.g., "en-US", "es-ES").
 -   **Game Data & Gameplay State:**
-    -   `gameData`: The structured `GameData` object for the current adventure.
+    -   `gameData`: The structured `GameData` object for the current adventure (includes the language it was generated in).
     -   `currentSceneId`: The ID of the scene currently being displayed.
     -   `gameHistory`: An array of scene IDs, tracking the player's path.
     -   `playerInventory`: An array of strings representing items the player possesses.
@@ -42,19 +44,19 @@ The `GameContext` (defined in `src/context/GameContext.tsx`) is the central hub 
 -   **Loading:** On initial mount of `GameProvider`, `useEffect` hooks load these states from `localStorage`.
 -   **Saving:** `useEffect` hooks monitor changes to these state variables and save them to `localStorage`.
 -   **Clearing:**
-    -   `resetCreationProgress()`: Clears `localStorage` entries related to adventure creation inputs.
+    -   `resetCreationProgress()`: Clears `localStorage` entries related to adventure creation inputs, including `adventureLanguage`.
     -   `resetFullGame()`: Clears active game and creation state `localStorage` entries (but not the saved libraries).
     -   `restartCurrentAdventure()`: Resets `currentSceneId`, `gameHistory`, and player states for the *current* adventure.
 
 ### Key Functions Provided by the Context
 
--   **State Setters:** Standard setter functions for all managed states.
+-   **State Setters:** Standard setter functions for all managed states, including `setAdventureLanguage`.
 -   **Effect & Alignment Application:**
     -   `applyEffects(effectsToApply?: Effect[])`: Processes an array of effects to update `playerInventory` and `playerStatusEffects`.
     -   `applyAlignmentShift(shift?: number)`: Updates `playerAlignment`.
 -   **Library Management:**
-    -   `saveAdventureToLibrary(name: string)`: Saves or updates the current `gameData` to the `savedAdventures` list.
-    -   `loadAdventureFromLibrary(adventureId: string)`: Loads an adventure from the library as the active game.
+    -   `saveAdventureToLibrary(name: string)`: Saves or updates the current `gameData` to the `savedAdventures` list. Ensures `adventureLanguage` is part of the saved `gameData`.
+    -   `loadAdventureFromLibrary(adventureId: string)`: Loads an adventure from the library as the active game. Sets `adventureLanguage` from the loaded game.
     -   `deleteAdventureFromLibrary(adventureId: string)`: Removes an adventure from the library.
     -   `isAdventureInLibrary(adventureId?: string)`: Checks if an adventure is in the library.
     -   `saveCharacterProfile(...)`: Saves or updates a character profile in the `savedCharacters` list.

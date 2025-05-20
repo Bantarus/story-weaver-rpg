@@ -1,3 +1,4 @@
+
 # User Workflow Implementation
 
 This document maps the defined user workflow to the actual implementation in the application's pages and components.
@@ -13,8 +14,10 @@ This document maps the defined user workflow to the actual implementation in the
 -   **Implementation:** `src/app/create/page.tsx`
 -   **Details:**
     -   Presents a multi-step form driven by `creationStep` from `GameContext`.
-    -   **Import Adventure:** User can import a `GameData` JSON file, bypassing subsequent generation steps.
-    -   **Step 1 ('story'):** `Textarea` for `storyText`.
+    -   **Import Adventure:** User can import a `GameData` JSON file (which may include language info), bypassing subsequent generation steps.
+    -   **Step 1 ('story'):**
+        -   `Select` dropdown for "Adventure Language."
+        -   `Textarea` for `storyText`.
     -   **Step 2 ('character'):**
         -   Input fields for character name, archetype, background, and goals (combined into `characterDescription`).
         -   **Character Library:** User can load a character profile from their library or save the current character to the library.
@@ -22,14 +25,14 @@ This document maps the defined user workflow to the actual implementation in the
     -   Inputs are stored in `GameContext` and persisted to `localStorage`.
 
 ### 3. Initiating Adventure Generation (`/create` page)
--   **Implementation:** Buttons trigger AI flow calls based on `aiProvider` settings from `SettingsContext`.
-    -   **"Analyze Story" button:** Calls `analyzeSourceMaterial` flow.
-    -   **"Craft Character & Get Outline" button:** Calls `generateNarrativeOutline` flow (passes advanced parameters).
-    -   **"Weave Your RPG!" button:** Calls `formatGameDataJson` flow.
-    -   If `USE_MOCK_GENERATION` is `true` (default for development), AI calls are bypassed, and mock data is used.
--   **Post-Generation Options:** After `gameData` is ready:
+-   **Implementation:** Buttons trigger AI flow calls based on `aiProvider` settings from `SettingsContext` and `adventureLanguage` from `GameContext`.
+    -   **"Analyze Story" button:** Calls `analyzeSourceMaterial` flow (passes language).
+    -   **"Craft Character & Get Outline" button:** Calls `generateNarrativeOutline` flow (passes advanced parameters and language).
+    -   **"Weave Your RPG!" button:** Calls `formatGameDataJson` flow (passes language).
+    -   If `USE_MOCK_GENERATION` is `true`, AI calls are bypassed, and mock data is used (mock data also includes a language field).
+-   **Post-Generation Options:** After `gameData` is ready (and includes language):
     -   User can "Save to Library" (prompts for a name).
-    -   User can "Export Game Data" as JSON.
+    -   User can "Export Game Data" as JSON (includes language).
     -   User can "Play Now."
 
 ### 4. Generation In Progress - User Feedback (`/create` page)
@@ -43,7 +46,7 @@ This document maps the defined user workflow to the actual implementation in the
 ### 5. Adventure Ready - Game Start
 -   **Implementation:** Navigation from `/create` to `src/app/play/page.tsx`.
 -   **Details:**
-    -   `GameContext` holds the `gameData`.
+    -   `GameContext` holds the `gameData` (including its language).
     -   `/play` page uses `gameData.startSceneId` to display the initial scene.
     -   Scene title, narrative text, choices, visual/sound hints are rendered.
     -   Effects defined for the starting scene (if any) are applied (inventory, status).
@@ -63,7 +66,7 @@ This document maps the defined user workflow to the actual implementation in the
 
 ### 7. Game State & Persistence
 -   **Implementation:** `src/context/GameContext.tsx`
--   **Details:** All relevant states (`gameData`, `currentSceneId`, `gameHistory`, creation inputs, `playerInventory`, `playerStatusEffects`, `playerAlignment`, `savedAdventures`, `savedCharacters`) are persisted to `localStorage`.
+-   **Details:** All relevant states (`gameData` (including language), `currentSceneId`, `gameHistory`, creation inputs (including `adventureLanguage`), `playerInventory`, `playerStatusEffects`, `playerAlignment`, `savedAdventures`, `savedCharacters`) are persisted to `localStorage`.
 
 ## Phase 3: Ending the Adventure & Replay
 
@@ -76,7 +79,7 @@ This document maps the defined user workflow to the actual implementation in the
 
 ### 9. Post-Adventure Options (`/play` page, on ending screen)
 -   **Implementation:**
-    -   **"Generate My Story" button:** Calls `generatePlaythroughStory` AI flow. The generated story is shown in a dialog and can be downloaded as a `.txt` file.
+    -   **"Generate My Story" button:** Calls `generatePlaythroughStory` AI flow (passes `adventureLanguage` from context). The generated story is shown in a dialog and can be downloaded as a `.txt` file.
     -   **"Restart Adventure" button:** Calls `restartCurrentAdventure()` from `GameContext`.
     -   **"Weave a New Adventure" button:** Calls `resetFullGame()` and navigates to `/create`.
 
@@ -93,7 +96,7 @@ This document maps the defined user workflow to the actual implementation in the
     -   **Saved Adventures Tab:**
         -   Lists all adventures saved by the user.
         -   Each adventure card shows title/name and snippet.
-        -   Options: "Play" (loads into `GameContext` and navigates to `/play`), "Delete," "Export Game Data."
+        -   Options: "Play" (loads into `GameContext`, including its language, and navigates to `/play`), "Delete," "Export Game Data."
     -   **Saved Characters Tab:**
         -   Lists all character profiles saved by the user.
         -   Each character card shows name, archetype, background, goals.

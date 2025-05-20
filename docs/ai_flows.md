@@ -1,8 +1,9 @@
+
 # AI Flows (Genkit)
 
 The application uses Genkit to orchestrate interactions with generative AI models. Flows are defined as server actions and are responsible for different stages of the RPG content generation. All flows are located in `src/ai/flows/`.
 
-The global Genkit instance is configured in `src/ai/genkit.ts` using the Gemini (Google AI) and Ollama plugins. Flows can dynamically use either provider based on user settings passed from the client.
+The global Genkit instance is configured in `src/ai/genkit.ts` using the Gemini (Google AI) and Ollama plugins. Flows can dynamically use either provider based on user settings passed from the client. All flows also accept a language parameter to ensure content is generated in the user's selected language.
 
 ## 1. `analyzeSourceMaterial`
 
@@ -10,7 +11,7 @@ The global Genkit instance is configured in `src/ai/genkit.ts` using the Gemini 
 -   **Purpose:** To analyze the user-provided story text and extract key literary elements. This helps in understanding the source material for subsequent generation steps.
 -   **Input (`AnalyzeSourceMaterialInput`):**
     -   `storyText` (string): The raw narrative text provided by the user.
-    -   `aiSettings` (object, optional): Specifies AI provider (`googleAI` or `ollama`) and Ollama model if applicable.
+    -   `aiSettings` (object, optional): Specifies AI provider (`googleAI` or `ollama`), Ollama model if applicable, and `language` (e.g., 'en-US', 'es-ES') for analysis.
 -   **Output (`AnalyzeSourceMaterialOutput`):**
     -   `plotPoints` (string): Key plot points.
     -   `characters` (string): Important characters identified.
@@ -18,39 +19,39 @@ The global Genkit instance is configured in `src/ai/genkit.ts` using the Gemini 
     -   `themes` (string): Underlying themes.
     -   `tone` (string): Overall tone and style.
 -   **Logic:**
-    -   Uses a Genkit prompt (`analyzeSourceMaterialPrompt`) that instructs the AI to act as a literary analyst and extract the specified elements from the `storyText`.
+    -   Uses a Genkit prompt (`analyzeSourceMaterialPrompt`) that instructs the AI to act as a literary analyst and extract the specified elements from the `storyText`, ensuring the analysis is provided in the specified `language`.
     -   The output is expected as a JSON object matching `AnalyzeSourceMaterialOutputSchema`.
     -   Dynamically selects the model (Google AI or Ollama) based on `aiSettings`.
 
 ## 2. `generateNarrativeOutline`
 
 -   **File:** `src/ai/flows/generate-narrative-outline.ts`
--   **Purpose:** To create a narrative outline that integrates the user's custom character into the provided story, considering advanced generation parameters.
+-   **Purpose:** To create a narrative outline that integrates the user's custom character into the provided story, considering advanced generation parameters and the selected language.
 -   **Input (`GenerateNarrativeOutlineInput`):**
     -   `storyText` (string): The original story text.
     -   `characterDescription` (string): A description of the player's character (name, archetype, background, goals).
-    -   `desiredTone` (string, optional): Preferred narrative tone (e.g., "Heroic", "Mysterious").
-    -   `desiredLength` (string, optional): Preferred narrative length/complexity (e.g., "Short", "Medium", "Long").
+    -   `desiredTone` (string, optional): Preferred narrative tone.
+    -   `desiredLength` (string, optional): Preferred narrative length/complexity.
     -   `keyThemes` (string, optional): Specific themes to emphasize.
-    -   `aiSettings` (object, optional): Specifies AI provider and Ollama model.
+    -   `aiSettings` (object, optional): Specifies AI provider, Ollama model, and `language` for the outline.
 -   **Output (`GenerateNarrativeOutlineOutput`):**
-    -   `narrativeOutline` (string): A textual outline describing how the character's journey might unfold, incorporating the inputs.
+    -   `narrativeOutline` (string): A textual outline in the specified `language`, describing how the character's journey might unfold.
 -   **Logic:**
-    -   Uses a Genkit prompt (`generateNarrativeOutlinePrompt`) that instructs the AI to weave the `characterDescription` into the `storyText`, considering `desiredTone`, `desiredLength`, and `keyThemes`.
+    -   Uses a Genkit prompt (`generateNarrativeOutlinePrompt`) that instructs the AI to weave the `characterDescription` into the `storyText`, considering `desiredTone`, `desiredLength`, `keyThemes`, and generating the output in the specified `language`.
     -   The output is expected as a JSON object matching `GenerateNarrativeOutlineOutputSchema`.
     -   Dynamically selects the model based on `aiSettings`.
 
 ## 3. `formatGameDataJson`
 
 -   **File:** `src/ai/flows/format-game-data-json.ts`
--   **Purpose:** To transform the high-level `narrativeOutline` into a detailed, structured JSON array of scenes that the game engine can directly consume. This flow now also generates in-game effects and alignment shifts for choices.
+-   **Purpose:** To transform the high-level `narrativeOutline` into a detailed, structured JSON array of scenes that the game engine can directly consume. This flow generates content in the specified language, including in-game effects and alignment shifts.
 -   **Input (`FormatGameDataJsonInput`):**
     -   `narrativeOutline` (string): The narrative outline generated by the previous flow.
-    -   `aiSettings` (object, optional): Specifies AI provider and Ollama model.
+    -   `aiSettings` (object, optional): Specifies AI provider, Ollama model, and `language` for all game data content.
 -   **Output (`FormatGameDataJsonOutput`, which is `AIGameDataSchema`):**
-    -   `title` (string): Overall title for the adventure.
+    -   `title` (string): Overall title for the adventure (in specified `language`).
     -   `startSceneId` (string): The ID of the initial scene.
-    -   `scenes` (array of `AISceneNode`): A list of all game scenes. Each `AISceneNode` includes:
+    -   `scenes` (array of `AISceneNode`): A list of all game scenes. All textual content within `AISceneNode` (titles, text, choice text, effect descriptions) is generated in the specified `language`. Each `AISceneNode` includes:
         -   `id` (string): Unique scene identifier.
         -   `title` (string): Title for the scene.
         -   `text` (string): Narrative text for the scene.
@@ -65,12 +66,12 @@ The global Genkit instance is configured in `src/ai/genkit.ts` using the Gemini 
         -   `visualHint` (string): Suggestion for visual elements.
         -   `soundEffect` (string): Suggestion for sound effects.
 -   **Logic:**
-    -   Uses a Genkit prompt (`formatGameDataJsonPrompt`) that provides detailed instructions and the schema for the desired JSON structure (array of scenes). It emphasizes branching narratives, effects, and alignment.
+    -   Uses a Genkit prompt (`formatGameDataJsonPrompt`) that provides detailed instructions and the schema for the desired JSON structure, emphasizing generation in the specified `language`.
     -   The AI is instructed to produce `scenes` as a JSON array.
     -   **Post-processing within the flow:**
         -   Cleans the raw text output from the LLM (strips Markdown fences).
         -   Parses the cleaned text into a JavaScript object.
-        -   Handles cases where the AI might (incorrectly) return `scenes` as an object map instead of an array, converting it if necessary.
+        -   Handles cases where the AI might return `scenes` as an object map instead of an array, converting it if necessary.
         -   Validates the `startSceneId`.
         -   The final output adheres to `AIGameDataSchema` (where `scenes` is an array).
     -   Dynamically selects the model based on `aiSettings`.
@@ -78,22 +79,22 @@ The global Genkit instance is configured in `src/ai/genkit.ts` using the Gemini 
 ## 4. `generatePlaythroughStory`
 
 -   **File:** `src/ai/flows/generate-playthrough-story.ts`
--   **Purpose:** To generate a narrative story based on a player's specific path through the game, their choices, and final state.
+-   **Purpose:** To generate a narrative story in the specified language, based on a player's specific path through the game, their choices, and final state.
 -   **Input (`GeneratePlaythroughStoryInput`):**
     -   `gameTitle` (string, optional): The title of the adventure.
     -   `originalStoryText` (string, optional): The original source story text.
-    -   `analysisResult` (object, optional): Structured analysis (plot, characters, etc.) of the original story.
-    -   `playedPath` (array of `PlayedSceneInfo`): An ordered array where each element details a visited scene (`sceneId`, `sceneTitle`, `sceneText`) and the `chosenChoiceText` made from that scene.
+    -   `analysisResult` (object, optional): Structured analysis of the original story.
+    -   `playedPath` (array of `PlayedSceneInfo`): An ordered array detailing visited scenes and chosen choices.
     -   `characterDescription` (string, optional): The player's character description.
     -   `playerAlignment` (number, optional): The player's final alignment score.
     -   `playerInventory` (array of string, optional): The player's final inventory.
     -   `playerStatusEffects` (array of string, optional): The player's final status effects.
-    -   `aiSettings` (object, optional): Specifies AI provider and Ollama model.
+    -   `aiSettings` (object, optional): Specifies AI provider, Ollama model, and `language` for the playthrough story.
 -   **Output (`GeneratePlaythroughStoryOutput`):**
-    -   `playthroughStory` (string): The generated narrative text of the player's unique playthrough.
+    -   `playthroughStory` (string): The generated narrative text in the specified `language`.
 -   **Logic:**
-    -   Uses a Genkit prompt (`generatePlaythroughStoryPrompt`) that instructs the AI to act as a storyteller.
-    -   The AI processes the `playedPath` sequentially, using the `sceneText` and `chosenChoiceText` to reconstruct the player's specific journey.
-    -   It incorporates the `originalStoryText` and `analysisResult` for broader context.
-    -   It also considers the `characterDescription` and the player's final state (alignment, inventory, status) to enrich the ending of the narrative.
+    -   Uses a Genkit prompt (`generatePlaythroughStoryPrompt`) that instructs the AI to act as a storyteller and generate the narrative in the specified `language`.
+    -   The AI processes the `playedPath` sequentially.
+    -   It incorporates `originalStoryText` and `analysisResult` for context.
+    -   It also considers the `characterDescription` and the player's final state.
     -   Dynamically selects the model based on `aiSettings`.
