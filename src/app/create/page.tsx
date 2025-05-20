@@ -4,7 +4,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useGame, type GameData, type SceneNode, type DesiredTone, type DesiredLength, type CharacterProfile } from "@/context/GameContext";
-import { useSettings } from "@/context/SettingsContext"; // Added
+import { useSettings } from "@/context/SettingsContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, BookText, UserPlus, Wand2, AlertCircle, CheckCircle, Play, Palette, Scale, Sparkles, RefreshCcw, Save, LibraryBig, UserCheck } from "lucide-react";
+import { Loader2, BookText, UserPlus, Wand2, AlertCircle, CheckCircle, Play, Palette, Scale, Sparkles, RefreshCcw, Save, LibraryBig, UserCheck, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 import { analyzeSourceMaterial } from "@/ai/flows/analyze-source-material";
@@ -47,24 +47,23 @@ export default function CreatePage() {
     isAdventureInLibrary,
     savedCharacters,
     saveCharacterProfile,
-    deleteCharacterProfile, 
+    deleteCharacterProfile,
     getCharacterProfileById
   } = useGame();
 
-  const { aiProvider, ollamaModel, isSettingsLoaded } = useSettings(); // Added
+  const { aiProvider, ollamaModel, isSettingsLoaded } = useSettings();
 
-  // Local state for character form fields
   const [charName, setCharNameLocal] = useState("");
   const [charArchetype, setCharArchetypeLocal] = useState("");
   const [charBackground, setCharBackgroundLocal] = useState("");
   const [charGoals, setCharGoalsLocal] = useState("");
-  
-  const [loadedCharId, setLoadedCharId] = useState<string | null>(null); 
+
+  const [loadedCharId, setLoadedCharId] = useState<string | null>(null);
   const [selectedLibraryCharId, setSelectedLibraryCharId] = useState<string | undefined>(undefined);
 
 
   useEffect(() => {
-    if (characterDescription && creationStep === 'character' && !loadedCharId) { 
+    if (characterDescription && creationStep === 'character' && !loadedCharId) {
       const nameMatch = characterDescription.match(/Name: (.*?)(?:\nArchetype:|\nBackground:|\nGoals:|$)/s);
       if (nameMatch) setCharNameLocal(nameMatch[1].trim()); else setCharNameLocal("");
       const archetypeMatch = characterDescription.match(/Archetype: (.*?)(?:\nBackground:|\nGoals:|$)/s);
@@ -110,7 +109,7 @@ export default function CreatePage() {
     setIsLoading(true);
     setError(null);
     try {
-      const result = await analyzeSourceMaterial({ 
+      const result = await analyzeSourceMaterial({
         storyText,
         aiSettings: { provider: aiProvider, ollamaModel: aiProvider === 'ollama' ? ollamaModel : undefined }
       });
@@ -137,7 +136,7 @@ export default function CreatePage() {
       return;
     }
     const fullCharacterDescription = `Name: ${charName.trim()}\nArchetype: ${charArchetype.trim()}\nBackground: ${charBackground.trim()}\nGoals: ${charGoals.trim()}`;
-    setCharacterDescription(fullCharacterDescription); 
+    setCharacterDescription(fullCharacterDescription);
 
     if (USE_MOCK_GENERATION) {
         setNarrativeOutline("This is a mocked narrative outline based on your character and the mocked story analysis. It sets the stage for an exciting adventure!");
@@ -184,7 +183,7 @@ export default function CreatePage() {
       let finalGameDataToSet: GameData | null = null;
 
       if (USE_MOCK_GENERATION) {
-        finalGameDataToSet = mockGameData as GameData; 
+        finalGameDataToSet = mockGameData as GameData;
         toast({ title: "Mock RPG Weaved!", description: "Your mock adventure is ready to play or save.", className: "bg-primary text-primary-foreground" });
       } else {
         if (!narrativeOutline) {
@@ -195,11 +194,11 @@ export default function CreatePage() {
           return;
         }
 
-        const aiFormattedOutput: FormatGameDataJsonOutput = await formatGameDataJson({ 
+        const aiFormattedOutput: FormatGameDataJsonOutput = await formatGameDataJson({
             narrativeOutline,
             aiSettings: { provider: aiProvider, ollamaModel: aiProvider === 'ollama' ? ollamaModel : undefined }
         });
-        
+
         if (!aiFormattedOutput || !aiFormattedOutput.scenes || !aiFormattedOutput.startSceneId || aiFormattedOutput.scenes.length === 0) {
             console.error("AI output structure error:", aiFormattedOutput);
             throw new Error("Received incomplete or invalid game data structure from AI. Check console for details.");
@@ -224,7 +223,7 @@ export default function CreatePage() {
             soundEffect: aiScene.soundEffect && aiScene.soundEffect.trim() !== "" ? aiScene.soundEffect.trim() : undefined,
           };
         });
-        
+
         let finalStartSceneId = aiFormattedOutput.startSceneId;
         if (!scenesRecord[finalStartSceneId]) {
             const availableSceneIds = Object.keys(scenesRecord);
@@ -244,8 +243,8 @@ export default function CreatePage() {
         };
         toast({ title: "RPG Weaved!", description: "Your adventure is ready to play or save.", className: "bg-primary text-primary-foreground" });
       }
-      
-      setGameData(finalGameDataToSet); 
+
+      setGameData(finalGameDataToSet);
 
     } catch (err) {
       console.error("Error formatting/generating game data:", err);
@@ -269,7 +268,7 @@ export default function CreatePage() {
       toast({ variant: "destructive", title: "Cannot Save", description: "No game data available to save." });
       return;
     }
-    
+
     console.log("handleSaveAdventureClick called. setTimeout pending.");
     setTimeout(() => {
         console.log("setTimeout callback executed.");
@@ -290,7 +289,7 @@ export default function CreatePage() {
             toast({ title: "Save Cancelled", description: "Adventure was not saved." });
         } else if (adventureName.trim() === "") {
             console.log("Prompt returned empty string.");
-            toast({ variant: "destructive", title: "Save Cancelled", description: "Adventure name cannot be empty. Please provide a valid name." });
+            toast({ variant: "destructive", title: "Save Error", description: "Adventure name cannot be empty. Please provide a valid name." });
         } else {
             console.log("Attempting to save with name:", adventureName.trim());
             if (saveAdventureToLibrary(adventureName.trim())) {
@@ -309,17 +308,46 @@ export default function CreatePage() {
       setCreationStep('error');
       return;
     }
-    resetCreationProgress(); 
+    resetCreationProgress();
     router.push("/play");
   };
 
+  const handleExportGameData = useCallback(() => {
+    if (!gameData) {
+      toast({ variant: "destructive", title: "Cannot Export", description: "No game data available to export." });
+      return;
+    }
+    try {
+      const fileNameBase = gameData.adventureName || gameData.title || "story-weaver-adventure";
+      // Sanitize filename: replace non-alphanumeric (except ._ -) with underscore
+      const safeFileNameBase = fileNameBase.replace(/[^a-z0-9_.-]/gi, '_').toLowerCase();
+      const fileName = `${safeFileNameBase}_gamedata.json`;
+
+      const jsonString = JSON.stringify(gameData, null, 2);
+      const blob = new Blob([jsonString], { type: "application/json" });
+      const href = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = href;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(href);
+      toast({ title: "Game Data Exported", description: `Saved as ${fileName}`, className: "bg-primary text-primary-foreground" });
+    } catch (exportError) {
+      console.error("Error exporting game data:", exportError);
+      toast({ variant: "destructive", title: "Export Failed", description: "Could not export game data." });
+    }
+  }, [gameData, toast]);
+
+
   const handleTryAgainOnError = () => {
     setError(null);
-    if (narrativeOutline) { 
+    if (narrativeOutline) {
         setCreationStep('generate');
-    } else if (analysisResult) { 
+    } else if (analysisResult) {
         setCreationStep('character');
-    } else { 
+    } else {
         setCreationStep('story');
     }
   };
@@ -335,7 +363,7 @@ export default function CreatePage() {
       setCharArchetypeLocal(charProfile.archetype);
       setCharBackgroundLocal(charProfile.background);
       setCharGoalsLocal(charProfile.goals);
-      setLoadedCharId(charProfile.id); 
+      setLoadedCharId(charProfile.id);
       const fullDesc = `Name: ${charProfile.name}\nArchetype: ${charProfile.archetype}\nBackground: ${charProfile.background}\nGoals: ${charProfile.goals}`;
       setCharacterDescription(fullDesc);
       toast({ title: "Character Loaded", description: `"${charProfile.name}" has been loaded into the form.`, className: "bg-primary text-primary-foreground" });
@@ -350,22 +378,22 @@ export default function CreatePage() {
       return;
     }
     const characterDataToSave: Omit<CharacterProfile, 'id'> & { id?: string } = {
-      id: loadedCharId || undefined, 
+      id: loadedCharId || undefined,
       name: charName.trim(),
       archetype: charArchetype.trim(),
       background: charBackground.trim(),
       goals: charGoals.trim(),
     };
     const savedProfile = saveCharacterProfile(characterDataToSave);
-    setLoadedCharId(savedProfile.id); 
+    setLoadedCharId(savedProfile.id);
     toast({ title: "Character Saved!", description: `"${savedProfile.name}" has been saved to your library.`, className: "bg-primary text-primary-foreground" });
   };
-  
+
   let saveCharButtonText = "Save Current Character to Library";
   let isCurrentCharSaved = false;
   if (loadedCharId) {
     const loadedProfile = getCharacterProfileById(loadedCharId);
-    if (loadedProfile && 
+    if (loadedProfile &&
         loadedProfile.name === charName.trim() &&
         loadedProfile.archetype === charArchetype.trim() &&
         loadedProfile.background === charBackground.trim() &&
@@ -375,8 +403,8 @@ export default function CreatePage() {
     } else {
       saveCharButtonText = "Update Character in Library";
     }
-  } else if (charName.trim() && charArchetype.trim() && charBackground.trim() && charGoals.trim() && savedCharacters.some(c => 
-      c.name === charName.trim() && 
+  } else if (charName.trim() && charArchetype.trim() && charBackground.trim() && charGoals.trim() && savedCharacters.some(c =>
+      c.name === charName.trim() &&
       c.archetype === charArchetype.trim() &&
       c.background === charBackground.trim() &&
       c.goals === charGoals.trim()
@@ -416,10 +444,10 @@ export default function CreatePage() {
           <AlertTitle>Error Encountered</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
           <div className="mt-4 flex gap-2">
-            <Button onClick={handleTryAgainOnError} variant="outline" className="w-full">
+            <Button onClick={handleTryAgainOnError} variant="outline" className="w-full sm:w-auto">
                 <RefreshCcw className="mr-2 h-4 w-4" /> Try Again from Previous Step
             </Button>
-            <Button onClick={() => { setGameData(null); resetCreationProgress(); setCreationStep('story');}} variant="destructive" className="w-full">
+            <Button onClick={() => { setGameData(null); resetCreationProgress(); setCreationStep('story');}} variant="destructive" className="w-full sm:w-auto">
                 Start Over
             </Button>
           </div>
@@ -461,7 +489,6 @@ export default function CreatePage() {
           </CardHeader>
           <form onSubmit={handleCharacterSubmit}>
             <CardContent className="space-y-6">
-              {/* Character Library Section */}
               <Card className="pt-4 bg-muted/20 border-dashed">
                 <CardHeader className="pt-0 pb-2">
                   <CardTitle className="text-xl flex items-center gap-2"><LibraryBig className="text-primary"/> Character Library</CardTitle>
@@ -492,20 +519,19 @@ export default function CreatePage() {
                   ) : (
                     <p className="text-sm text-muted-foreground">Your character library is empty. Save a character using the button below!</p>
                   )}
-                   <Button 
-                    type="button" 
+                   <Button
+                    type="button"
                     variant={isCurrentCharSaved ? "secondary" : "outline"}
-                    onClick={handleSaveCurrentCharacterToLibrary} 
+                    onClick={handleSaveCurrentCharacterToLibrary}
                     disabled={isLoading || !charName.trim() || !charArchetype.trim() || !charBackground.trim() || !charGoals.trim() || isCurrentCharSaved}
                     className="w-full"
                   >
-                    <Save className="mr-2 h-4 w-4" /> 
+                    <Save className="mr-2 h-4 w-4" />
                     {saveCharButtonText}
                   </Button>
                 </CardContent>
               </Card>
 
-              {/* Character Definition Fields */}
               <div>
                 <Label htmlFor="charName">Character Name</Label>
                 <Input id="charName" value={charName} onChange={(e) => {setCharNameLocal(e.target.value); setLoadedCharId(null);}} placeholder="e.g., Elara Meadowlight" disabled={isLoading} />
@@ -598,7 +624,7 @@ export default function CreatePage() {
             )}
             {gameData && (
               <CardDescription>
-                Your adventure "{gameData.adventureName || gameData.title || "Untitled Adventure"}" is woven! You can save it to your library or play it now.
+                Your adventure "{gameData.adventureName || gameData.title || "Untitled Adventure"}" is woven! You can save it to your library, export it, or play it now.
               </CardDescription>
             )}
           </CardHeader>
@@ -625,28 +651,31 @@ export default function CreatePage() {
               </Alert>
             )}
           </CardContent>
-          <CardFooter className="flex flex-col sm:flex-row justify-between gap-2">
-            <Button variant="outline" onClick={() => setCreationStep("character")} disabled={isLoading || !!gameData}>
+          <CardFooter className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <Button variant="outline" onClick={() => setCreationStep("character")} disabled={isLoading || !!gameData} className="w-full">
               Back to Character {!gameData && "(Modifies Outline)"}
             </Button>
             {!gameData && (
-              <Button onClick={handleGenerateGame} disabled={isLoading || !narrativeOutline} className="w-full sm:w-auto">
+              <Button onClick={handleGenerateGame} disabled={isLoading || !narrativeOutline} className="w-full sm:col-span-2 lg:col-span-1">
                 {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
                 {USE_MOCK_GENERATION ? "Weave Mock RPG!" : "Weave Your RPG!"}
               </Button>
             )}
             {gameData && (
               <>
-                <Button 
-                  onClick={handleSaveAdventureClick} 
-                  variant={isCurrentAdventureSaved ? "secondary" : "default"} 
-                  className="w-full sm:w-auto" 
+                <Button
+                  onClick={handleSaveAdventureClick}
+                  variant={isCurrentAdventureSaved ? "secondary" : "default"}
+                  className="w-full"
                   disabled={isLoading || isCurrentAdventureSaved}
                 >
                   {isCurrentAdventureSaved ? <CheckCircle className="mr-2 h-4 w-4" /> : <Save className="mr-2 h-4 w-4" />}
                   {isCurrentAdventureSaved ? "Saved to Library" : "Save to Library"}
                 </Button>
-                <Button onClick={handlePlayNowClick} className="w-full sm:w-auto bg-primary hover:bg-primary/90" disabled={isLoading}>
+                 <Button onClick={handleExportGameData} variant="outline" className="w-full" disabled={isLoading}>
+                  <Download className="mr-2 h-4 w-4" /> Export Game Data
+                </Button>
+                <Button onClick={handlePlayNowClick} className="w-full bg-primary hover:bg-primary/90 sm:col-span-2 lg:col-span-1 lg:col-start-3" disabled={isLoading}>
                   <Play className="mr-2 h-4 w-4" /> Play Now
                 </Button>
               </>
@@ -657,3 +686,5 @@ export default function CreatePage() {
     </div>
   );
 }
+
+    
