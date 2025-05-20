@@ -36,7 +36,7 @@ export default function LibraryPage() {
   const { 
     savedAdventures, loadAdventureFromLibrary, deleteAdventureFromLibrary,
     savedCharacters, saveCharacterProfile, deleteCharacterProfile,
-    savedPlaythroughs // Added savedPlaythroughs
+    savedPlaythroughs 
     // deleteSavedPlaythrough // For future implementation
   } = useGame();
   const router = useRouter();
@@ -485,7 +485,7 @@ export default function LibraryPage() {
                         }
                     </DialogDescription>
                 </DialogHeader>
-                <ScrollArea className="flex-grow p-1 pr-4 -mx-1 my-4 min-h-[300px] border rounded-md bg-background">
+                <ScrollArea className="flex-grow p-1 pr-4 -mx-1 my-4 min-h-0 border rounded-md bg-background"> {/* Changed min-h-[300px] to min-h-0 */}
                    <div className="prose prose-sm sm:prose lg:prose-lg xl:prose-xl max-w-none p-4 text-foreground whitespace-pre-line">
                         {currentReadingStory.storyText}
                    </div>
