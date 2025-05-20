@@ -20,7 +20,7 @@ const CREATION_STEP_KEY = 'storyWeaver_creationStep';
 const GAME_HISTORY_KEY = 'storyWeaver_gameHistory';
 const PLAYER_INVENTORY_KEY = 'storyWeaver_playerInventory';
 const PLAYER_STATUS_EFFECTS_KEY = 'storyWeaver_playerStatusEffects';
-const PLAYER_ALIGNMENT_KEY = 'storyWeaver_playerAlignment'; // New key
+const PLAYER_ALIGNMENT_KEY = 'storyWeaver_playerAlignment'; 
 
 const SAVED_ADVENTURES_KEY = 'storyWeaver_savedAdventures';
 
@@ -57,20 +57,29 @@ export interface SceneChoice {
   text: string;
   nextNodeId: string;
   effects?: Effect[];
-  alignmentEffect?: number; // New field for alignment
+  alignmentEffect?: number; 
 }
 
 export type CreationStep = 'story' | 'character' | 'generate' | 'error';
 export type DesiredTone = "Default" | "Heroic" | "Mysterious" | "Comedic" | "Tragic" | "Dramatic" | string;
 export type DesiredLength = "Default" | "Short" | "Medium" | "Long" | string;
 
+export interface AnalyzeSourceMaterialOutput {
+  plotPoints: string;
+  characters: string;
+  settings: string;
+  themes: string;
+  tone: string;
+}
+
+
 interface GameContextType {
   storyText: string | null;
   setStoryText: (text: string | null) => void;
   characterDescription: string | null;
   setCharacterDescription: (desc: string | null) => void;
-  analysisResult: any | null;
-  setAnalysisResult: (result: any | null) => void;
+  analysisResult: AnalyzeSourceMaterialOutput | null; // Typed
+  setAnalysisResult: (result: AnalyzeSourceMaterialOutput | null) => void;
   narrativeOutline: string | null;
   setNarrativeOutline: (outline: string | null) => void;
 
@@ -89,9 +98,9 @@ interface GameContextType {
 
   playerInventory: string[];
   playerStatusEffects: string[];
-  playerAlignment: number; // New state for alignment
+  playerAlignment: number; 
   applyEffects: (effectsToApply?: Effect[]) => void;
-  applyAlignmentShift: (shift?: number) => void; // New function
+  applyAlignmentShift: (shift?: number) => void; 
 
   isLoading: boolean;
   setIsLoading: (loading: boolean) => void;
@@ -118,7 +127,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
 
   const [storyText, setStoryTextState] = useState<string | null>(null);
   const [characterDescription, setCharacterDescriptionState] = useState<string | null>(null);
-  const [analysisResult, setAnalysisResultState] = useState<any | null>(null);
+  const [analysisResult, setAnalysisResultState] = useState<AnalyzeSourceMaterialOutput | null>(null);
   const [narrativeOutline, setNarrativeOutlineState] = useState<string | null>(null);
   const [desiredTone, setDesiredToneState] = useState<DesiredTone>("Default");
   const [desiredLength, setDesiredLengthState] = useState<DesiredLength>("Default");
@@ -131,7 +140,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
 
   const [playerInventory, setPlayerInventoryState] = useState<string[]>([]);
   const [playerStatusEffects, setPlayerStatusEffectsState] = useState<string[]>([]);
-  const [playerAlignment, setPlayerAlignmentState] = useState<number>(0); // Initialized to 0
+  const [playerAlignment, setPlayerAlignmentState] = useState<number>(0); 
 
   const [isLoading, setIsLoadingState] = useState(false);
   const [error, setErrorState] = useState<string | null>(null);
@@ -168,7 +177,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
     if (storedPlayerInventory) setPlayerInventoryState(JSON.parse(storedPlayerInventory));
     const storedPlayerStatusEffects = localStorage.getItem(PLAYER_STATUS_EFFECTS_KEY);
     if (storedPlayerStatusEffects) setPlayerStatusEffectsState(JSON.parse(storedPlayerStatusEffects));
-    const storedPlayerAlignment = localStorage.getItem(PLAYER_ALIGNMENT_KEY); // Load alignment
+    const storedPlayerAlignment = localStorage.getItem(PLAYER_ALIGNMENT_KEY); 
     if (storedPlayerAlignment) setPlayerAlignmentState(JSON.parse(storedPlayerAlignment));
 
 
@@ -204,13 +213,13 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => { if (isLoaded) playerInventory.length > 0 ? localStorage.setItem(PLAYER_INVENTORY_KEY, JSON.stringify(playerInventory)) : localStorage.removeItem(PLAYER_INVENTORY_KEY); }, [playerInventory, isLoaded]);
   useEffect(() => { if (isLoaded) playerStatusEffects.length > 0 ? localStorage.setItem(PLAYER_STATUS_EFFECTS_KEY, JSON.stringify(playerStatusEffects)) : localStorage.removeItem(PLAYER_STATUS_EFFECTS_KEY); }, [playerStatusEffects, isLoaded]);
-  useEffect(() => { if (isLoaded) localStorage.setItem(PLAYER_ALIGNMENT_KEY, JSON.stringify(playerAlignment)); }, [playerAlignment, isLoaded]); // Save alignment
+  useEffect(() => { if (isLoaded) localStorage.setItem(PLAYER_ALIGNMENT_KEY, JSON.stringify(playerAlignment)); }, [playerAlignment, isLoaded]); 
 
   useEffect(() => { if (isLoaded) localStorage.setItem(SAVED_ADVENTURES_KEY, JSON.stringify(savedAdventures)); }, [savedAdventures, isLoaded]);
 
   const setStoryText = useCallback((text: string | null) => setStoryTextState(text), []);
   const setCharacterDescription = useCallback((desc: string | null) => setCharacterDescriptionState(desc), []);
-  const setAnalysisResult = useCallback((result: any | null) => setAnalysisResultState(result), []);
+  const setAnalysisResult = useCallback((result: AnalyzeSourceMaterialOutput | null) => setAnalysisResultState(result), []);
   const setNarrativeOutline = useCallback((outline: string | null) => setNarrativeOutlineState(outline), []);
   const setDesiredTone = useCallback((tone: DesiredTone) => setDesiredToneState(tone), []);
   const setDesiredLength = useCallback((length: DesiredLength) => setDesiredLengthState(length), []);
@@ -311,14 +320,14 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
     setGameHistoryState([]);
     setPlayerInventoryState([]);
     setPlayerStatusEffectsState([]);
-    setPlayerAlignmentState(0); // Reset alignment
+    setPlayerAlignmentState(0); 
     setCreationStepState('story');
     localStorage.removeItem(GAME_DATA_KEY);
     localStorage.removeItem(CURRENT_SCENE_ID_KEY);
     localStorage.removeItem(GAME_HISTORY_KEY);
     localStorage.removeItem(PLAYER_INVENTORY_KEY);
     localStorage.removeItem(PLAYER_STATUS_EFFECTS_KEY);
-    localStorage.removeItem(PLAYER_ALIGNMENT_KEY); // Remove alignment
+    localStorage.removeItem(PLAYER_ALIGNMENT_KEY); 
     localStorage.setItem(CREATION_STEP_KEY, 'story');
     setErrorState(null);
   }, [resetCreationProgress]);
@@ -330,13 +339,13 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
       setGameHistoryState([data.startSceneId]);
       setPlayerInventoryState([]);
       setPlayerStatusEffectsState([]);
-      setPlayerAlignmentState(0); // Reset alignment
+      setPlayerAlignmentState(0); 
     } else if (!data) {
       setCurrentSceneIdState(null);
       setGameHistoryState([]);
       setPlayerInventoryState([]);
       setPlayerStatusEffectsState([]);
-      setPlayerAlignmentState(0); // Reset alignment
+      setPlayerAlignmentState(0); 
     }
   }, []);
 
@@ -369,8 +378,8 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
     const adventureToLoad = savedAdventures.find(adv => adv.id === adventureId);
     if (adventureToLoad) {
       setGameDataInternal(adventureToLoad);
-      resetCreationProgress();
-      setCreationStepState('generate');
+      resetCreationProgress(); // This will clear storyText, characterDescription, etc.
+      setCreationStepState('generate'); // Or directly to play, depending on desired flow
       return true;
     }
     return false;
@@ -394,7 +403,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
       setGameHistoryState([gameData.startSceneId]);
       setPlayerInventoryState([]);
       setPlayerStatusEffectsState([]);
-      setPlayerAlignmentState(0); // Reset alignment
+      setPlayerAlignmentState(0); 
       setErrorState(null);
     } else {
       console.warn("Cannot restart adventure: gameData, startSceneId, or start scene is missing/invalid.");
@@ -422,9 +431,9 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
 
       playerInventory,
       playerStatusEffects,
-      playerAlignment, // Expose alignment
+      playerAlignment, 
       applyEffects,
-      applyAlignmentShift, // Expose new function
+      applyAlignmentShift, 
 
       isLoading, setIsLoading,
       error, setError,
@@ -452,3 +461,4 @@ export const useGame = () => {
   }
   return context;
 };
+

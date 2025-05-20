@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { useGame, type SceneNode, type SceneChoice } from "@/context/GameContext";
+import { useGame, type SceneNode, type SceneChoice, type AnalyzeSourceMaterialOutput } from "@/context/GameContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -24,7 +24,8 @@ export default function PlayPage() {
     currentSceneId, setCurrentSceneId,
     gameHistory, 
     characterDescription,
-    storyText, // Added to get original story text
+    storyText, 
+    analysisResult, // Added to get analysis result
     playerInventory,
     playerStatusEffects,
     playerAlignment, 
@@ -99,9 +100,9 @@ export default function PlayPage() {
     router.push("/create");
   };
 
-  const downloadStory = (storyText: string, filename: string = "my-rpg-adventure.txt") => {
+  const downloadStory = (storyTextToDownload: string, filename: string = "my-rpg-adventure.txt") => {
     const element = document.createElement("a");
-    const file = new Blob([storyText], {type: 'text/plain;charset=utf-8'});
+    const file = new Blob([storyTextToDownload], {type: 'text/plain;charset=utf-8'});
     element.href = URL.createObjectURL(file);
     element.download = filename;
     document.body.appendChild(element); // Required for this to work in FireFox
@@ -138,7 +139,8 @@ export default function PlayPage() {
 
       const storyInput: GeneratePlaythroughStoryInput = {
         gameTitle: gameData.title,
-        originalStoryText: storyText || undefined, // Pass the original story text
+        originalStoryText: storyText || undefined, 
+        analysisResult: analysisResult || undefined, // Pass the analysisResult
         scenes: simplifiedScenes,
         gameHistory: gameHistory,
         characterDescription: characterDescription || undefined,

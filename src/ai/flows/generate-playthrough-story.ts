@@ -10,11 +10,10 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import type { SceneNode } from '@/context/GameContext'; // Assuming SceneNode is exported or can be imported
+import type { AnalyzeSourceMaterialOutput } from './analyze-source-material'; // For type safety
 
 // We need a Zod schema for SceneNode if we pass it directly.
 // For simplicity in the prompt, we might just pass relevant parts or expect a structured string.
-// Let's define a simplified SceneNode for the input schema here if needed, or rely on the main one.
 
 const SceneChoiceSchemaForStory = z.object({
   text: z.string(),
@@ -31,9 +30,20 @@ const SceneNodeSchemaForStory = z.object({
   endingType: z.string().optional(),
 });
 
+// Schema for the analysis result, matching AnalyzeSourceMaterialOutput
+const AnalysisResultSchemaForStory = z.object({
+  plotPoints: z.string().describe('Key plot points of the story.'),
+  characters: z.string().describe('Important characters in the story.'),
+  settings: z.string().describe('Key settings and locations in the story.'),
+  themes: z.string().describe('Underlying themes explored in the story.'),
+  tone: z.string().describe('Overall tone and style of the story.'),
+}).optional().describe("Structured analysis of the original story: plot points, characters, settings, themes, tone.");
+
+
 export const GeneratePlaythroughStoryInputSchema = z.object({
   gameTitle: z.string().optional().describe("The title of the adventure."),
   originalStoryText: z.string().optional().describe("The original source story text that the adventure was based on. This provides overall context."),
+  analysisResult: AnalysisResultSchemaForStory,
   scenes: z.record(SceneNodeSchemaForStory).describe("A record of all scene nodes in the game, keyed by scene ID."),
   gameHistory: z.array(z.string()).describe("An ordered list of scene IDs the player traversed."),
   characterDescription: z.string().optional().describe("The original description of the player's character."),
@@ -60,10 +70,21 @@ const prompt = ai.definePrompt({
   output: { schema: GeneratePlaythroughStoryOutputSchema },
   prompt: `You are a master storyteller. Your task is to transform a player's journey through a text-based RPG into a flowing, engaging narrative.
 
-First, here is the original source material that the RPG adventure was based on, to give you overall context of the world, characters, and themes:
+First, here is some context about the original source material the RPG adventure was based on:
+
 {{#if originalStoryText}}
-Original Story Context:
+Original Story Text:
 {{{originalStoryText}}}
+---
+{{/if}}
+
+{{#if analysisResult}}
+Key Elements from Original Story:
+- Plot Points: {{{analysisResult.plotPoints}}}
+- Characters: {{{analysisResult.characters}}}
+- Settings: {{{analysisResult.settings}}}
+- Themes: {{{analysisResult.themes}}}
+- Tone: {{{analysisResult.tone}}}
 ---
 {{/if}}
 
