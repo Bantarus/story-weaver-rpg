@@ -44,8 +44,8 @@ const GeneratePlaythroughStoryInputSchema = z.object({
   gameTitle: z.string().optional().describe("The title of the adventure."),
   originalStoryText: z.string().optional().describe("The original source story text that the adventure was based on. This provides overall context."),
   analysisResult: AnalysisResultSchemaForStory,
-  scenes: z.record(SceneNodeSchemaForStory).describe("A record of all scene nodes in the game, keyed by scene ID."),
-  gameHistory: z.array(z.string()).describe("An ordered list of scene IDs the player traversed."),
+  scenes: z.record(SceneNodeSchemaForStory).describe("A record of all scene nodes in the game, keyed by scene ID. Each key is a scene ID, and its value is the scene object."),
+  gameHistory: z.array(z.string()).describe("An ordered list of scene IDs the player traversed. The LAST ID in this array is the player's actual ending scene."),
   characterDescription: z.string().optional().describe("The original description of the player's character."),
   playerAlignment: z.number().optional().describe("The player's final alignment score."),
   playerInventory: z.array(z.string()).optional().describe("The player's final inventory items."),
@@ -69,15 +69,14 @@ const prompt = ai.definePrompt({
   input: { schema: GeneratePlaythroughStoryInputSchema },
   output: { schema: GeneratePlaythroughStoryOutputSchema },
   prompt: `You are a master storyteller. Your task is to transform a player's journey through a text-based RPG into a flowing, engaging narrative.
+This narrative MUST strictly follow the sequence of scenes the player visited, as detailed in the 'gameHistory' array.
 
 First, here is some context about the original source material the RPG adventure was based on:
-
 {{#if originalStoryText}}
 Original Story Text:
 {{{originalStoryText}}}
 ---
 {{/if}}
-
 {{#if analysisResult}}
 Key Elements from Original Story:
 - Plot Points: {{{analysisResult.plotPoints}}}
@@ -92,23 +91,35 @@ Now, here is the specific context for the adventure the player experienced:
 {{#if gameTitle}}Adventure Title: {{{gameTitle}}}{{/if}}
 {{#if characterDescription}}Player Character: {{{characterDescription}}}{{/if}}
 
-The player progressed through the following scenes in this order:
+The player progressed through the following scenes, in this EXACT order (this is the 'gameHistory'):
 {{#each gameHistory}}
 - Scene ID: {{{this}}}
 {{/each}}
 
-Use the provided 'scenes' data (a map of scene IDs to scene details) to construct the story. For each scene ID in the player's 'gameHistory':
-1. Retrieve the scene details: 'scenes[sceneId].title' (if any), 'scenes[sceneId].text'.
-2. Incorporate the main text of the scene.
-3. Identify which choice the player made from 'scenes[sceneId].choices' to get to the *next* scene in their 'gameHistory'. The choices list contains 'text' and 'nextNodeId'. Match the 'nextNodeId' with the ID of the next scene in 'gameHistory'. Describe this choice or its consequence as a natural transition in the story.
-4. If it's an ending scene ('scenes[sceneId].isEnding' is true), use its text and 'scenes[sceneId].endingType' to conclude the story.
+Narrative Construction Rules:
+You will construct the story by processing each scene ID from the 'gameHistory' array, one by one, in the order they appear.
 
-Weave these elements into a single, coherent story. Make it engaging and readable. Do not just list scene texts; connect them smoothly as if narrating a continuous story.
+For each 'current_scene_id' in 'gameHistory':
+1. Retrieve the current scene's details from the 'scenes' data using the 'current_scene_id' (e.g., \`scenes[current_scene_id]\`).
+2. Weave the 'text' of this current scene into your narrative. If the scene has a 'title' (e.g., \`scenes[current_scene_id].title\`), you can incorporate it.
+
+3. **If this is NOT the last scene ID in 'gameHistory'**:
+    a. Get the 'next_scene_id' from the 'gameHistory' array (the ID immediately following the 'current_scene_id').
+    b. Look at the 'choices' array of the *current* scene (e.g., \`scenes[current_scene_id].choices\`).
+    c. Find the specific choice object within that array where its 'nextNodeId' property matches the 'next_scene_id'.
+    d. Narrate that the player made this specific choice (you can use the 'text' property of the found choice object) or describe the immediate consequence of this choice that logically leads to the 'next_scene_id'. This transition is key.
+
+4. **If this IS the last scene ID in 'gameHistory'**:
+    a. This scene is the player's actual ending. Fully narrate the 'text' of this final scene (\`scenes[last_scene_id_in_history].text\`).
+    b. Conclude the story based on this final scene's 'endingType' (e.g., \`scenes[last_scene_id_in_history].endingType\`). The narrative must reflect this specific ending.
+
+CRITICAL: Do NOT include scenes or outcomes that are not part of the provided 'gameHistory' path. The story must be a direct account of the path taken by the player.
+Make the story engaging and readable. Do not just list scene texts; connect them smoothly as if narrating a continuous story, clearly driven by the player's choices as recorded in 'gameHistory'.
 
 {{#if playerAlignment}}The player's final moral alignment was {{playerAlignment}} (where positive is good, negative is evil, and zero is neutral). You can subtly reflect this in the tone of the ending if appropriate.{{/if}}
-{{#if playerInventory}}Final Inventory: {{#each playerInventory}}{{{this}}}{{#unless @last}}, {{/unless}}{{/each}}.{{/if}}
-{{#if playerStatusEffects}}Final Status Effects: {{#each playerStatusEffects}}{{{this}}}{{#unless @last}}, {{/unless}}{{/each}}.{{/if}}
-If inventory or status effects are mentioned, only include them if they significantly impacted the story's conclusion or character's state in a narratively interesting way.
+{{#if playerInventory.length}}Final Inventory: {{#each playerInventory}}{{{this}}}{{#unless @last}}, {{/unless}}{{/each}}.{{/if}}
+{{#if playerStatusEffects.length}}Final Status Effects: {{#each playerStatusEffects}}{{{this}}}{{#unless @last}}, {{/unless}}{{/each}}.{{/if}}
+(If inventory or status effects are mentioned, only include them if they are narratively significant for the conclusion described by the final scene in 'gameHistory').
 
 Generated Story:
 `,
@@ -132,4 +143,6 @@ const generatePlaythroughStoryFlow = ai.defineFlow(
     return output;
   }
 );
+    
+
     
