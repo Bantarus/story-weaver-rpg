@@ -13,7 +13,7 @@ const NARRATIVE_OUTLINE_KEY = 'storyWeaver_narrativeOutline';
 const DESIRED_TONE_KEY = 'storyWeaver_desiredTone';
 const DESIRED_LENGTH_KEY = 'storyWeaver_desiredLength';
 const KEY_THEMES_KEY = 'storyWeaver_keyThemes';
-const ADVENTURE_LANGUAGE_KEY = 'storyWeaver_adventureLanguage'; // New key
+const ADVENTURE_LANGUAGE_KEY = 'storyWeaver_adventureLanguage';
 
 const GAME_DATA_KEY = 'storyWeaver_gameData';
 const CURRENT_SCENE_ID_KEY = 'storyWeaver_currentSceneId';
@@ -25,6 +25,7 @@ const PLAYER_ALIGNMENT_KEY = 'storyWeaver_playerAlignment';
 
 const SAVED_ADVENTURES_KEY = 'storyWeaver_savedAdventures';
 const SAVED_CHARACTERS_KEY = 'storyWeaver_savedCharacters';
+const SAVED_PLAYTHROUGHS_KEY = 'storyWeaver_savedPlaythroughs'; // New key
 
 // Character Profile Definition
 export interface CharacterProfile {
@@ -50,8 +51,7 @@ export interface GameData {
   title?: string;
   startSceneId: string;
   scenes: Record<string, SceneNode>;
-  language?: string; // New field
-  // Optional fields that might come from an imported GameData file
+  language?: string;
   storyText?: string;
   characterDescription?: string;
   analysisResult?: AnalyzeSourceMaterialOutput | null;
@@ -80,7 +80,6 @@ export interface SceneChoice {
 export type CreationStep = 'story' | 'character' | 'generate' | 'error';
 export type DesiredTone = "Default" | "Heroic" | "Mysterious" | "Comedic" | "Tragic" | "Dramatic" | string;
 export type DesiredLength = "Default" | "Short" | "Medium" | "Long" | string;
-// Define common languages - expand as needed
 export type AdventureLanguage = "en-US" | "es-ES" | "fr-FR" | "de-DE" | string;
 
 
@@ -90,6 +89,15 @@ export interface AnalyzeSourceMaterialOutput {
   settings: string;
   themes: string;
   tone: string;
+}
+
+export interface SavedPlaythrough {
+  id: string;
+  adventureId?: string;
+  adventureName?: string;
+  characterDescription?: string;
+  storyText: string;
+  dateGenerated: string; // ISO date string
 }
 
 
@@ -109,8 +117,8 @@ interface GameContextType {
   setDesiredLength: (length: DesiredLength) => void;
   keyThemes: string | null;
   setKeyThemes: (themes: string | null) => void;
-  adventureLanguage: AdventureLanguage; // New state
-  setAdventureLanguage: (lang: AdventureLanguage) => void; // New setter
+  adventureLanguage: AdventureLanguage;
+  setAdventureLanguage: (lang: AdventureLanguage) => void;
 
   gameData: GameData | null;
   setGameData: (data: GameData | null) => void;
@@ -137,12 +145,14 @@ interface GameContextType {
   deleteAdventureFromLibrary: (adventureId: string) => void;
   isAdventureInLibrary: (adventureId?: string) => boolean;
 
-  // Character Library
   savedCharacters: CharacterProfile[];
   saveCharacterProfile: (characterData: Omit<CharacterProfile, 'id'> & { id?: string }) => CharacterProfile;
   deleteCharacterProfile: (characterId: string) => void;
   getCharacterProfileById: (characterId: string) => CharacterProfile | undefined;
 
+  savedPlaythroughs: SavedPlaythrough[]; // New state
+  addSavedPlaythrough: (playthroughData: Omit<SavedPlaythrough, 'id' | 'dateGenerated'>) => void; // New function
+  // deleteSavedPlaythrough: (playthroughId: string) => void; // For later
 
   resetCreationProgress: () => void;
   resetFullGame: () => void;
@@ -161,7 +171,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
   const [desiredTone, setDesiredToneState] = useState<DesiredTone>("Default");
   const [desiredLength, setDesiredLengthState] = useState<DesiredLength>("Default");
   const [keyThemes, setKeyThemesState] = useState<string | null>(null);
-  const [adventureLanguage, setAdventureLanguageState] = useState<AdventureLanguage>("en-US"); // New state default
+  const [adventureLanguage, setAdventureLanguageState] = useState<AdventureLanguage>("en-US");
   const [creationStep, setCreationStepState] = useState<CreationStep>('story');
 
   const [gameData, setGameDataState] = useState<GameData | null>(null);
@@ -178,6 +188,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
 
   const [savedAdventures, setSavedAdventuresState] = useState<GameData[]>([]);
   const [savedCharacters, setSavedCharactersState] = useState<CharacterProfile[]>([]);
+  const [savedPlaythroughs, setSavedPlaythroughsState] = useState<SavedPlaythrough[]>([]); // New state
 
   const resetCreationProgress = useCallback(() => {
     setStoryTextState(null);
@@ -187,7 +198,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
     setDesiredToneState("Default");
     setDesiredLengthState("Default");
     setKeyThemesState(null);
-    setAdventureLanguageState("en-US"); // Reset language
+    setAdventureLanguageState("en-US");
     localStorage.removeItem(STORY_TEXT_KEY);
     localStorage.removeItem(CHARACTER_DESC_KEY);
     localStorage.removeItem(ANALYSIS_RESULT_KEY);
@@ -195,7 +206,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
     localStorage.removeItem(DESIRED_TONE_KEY);
     localStorage.removeItem(DESIRED_LENGTH_KEY);
     localStorage.removeItem(KEY_THEMES_KEY);
-    localStorage.removeItem(ADVENTURE_LANGUAGE_KEY); // Remove language
+    localStorage.removeItem(ADVENTURE_LANGUAGE_KEY);
     setErrorState(null);
   }, []);
 
@@ -215,7 +226,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
     if (storedDesiredLength) setDesiredLengthState(storedDesiredLength as DesiredLength);
     const storedKeyThemes = localStorage.getItem(KEY_THEMES_KEY);
     if (storedKeyThemes) setKeyThemesState(storedKeyThemes);
-    const storedAdventureLanguage = localStorage.getItem(ADVENTURE_LANGUAGE_KEY); // Load language
+    const storedAdventureLanguage = localStorage.getItem(ADVENTURE_LANGUAGE_KEY);
     if (storedAdventureLanguage) setAdventureLanguageState(storedAdventureLanguage as AdventureLanguage);
     
     const storedGameData = localStorage.getItem(GAME_DATA_KEY);
@@ -249,6 +260,9 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
     const storedSavedCharacters = localStorage.getItem(SAVED_CHARACTERS_KEY);
     if (storedSavedCharacters) setSavedCharactersState(JSON.parse(storedSavedCharacters));
 
+    const storedSavedPlaythroughs = localStorage.getItem(SAVED_PLAYTHROUGHS_KEY); // Load saved playthroughs
+    if (storedSavedPlaythroughs) setSavedPlaythroughsState(JSON.parse(storedSavedPlaythroughs));
+
     setIsLoaded(true);
   }, []);
 
@@ -266,7 +280,6 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
                 });
             }
         }
-         // Set adventureLanguage from loaded gameData if available
         if (gameData.language) {
           setAdventureLanguageState(gameData.language as AdventureLanguage);
         }
@@ -277,26 +290,27 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
   }, [gameData, currentSceneId, gameHistory.length, isLoaded]);
 
 
-  useEffect(() => { if (isLoaded) storyText ? localStorage.setItem(STORY_TEXT_KEY, storyText) : localStorage.removeItem(STORY_TEXT_KEY); }, [storyText, isLoaded]);
-  useEffect(() => { if (isLoaded) characterDescription ? localStorage.setItem(CHARACTER_DESC_KEY, characterDescription) : localStorage.removeItem(CHARACTER_DESC_KEY); }, [characterDescription, isLoaded]);
-  useEffect(() => { if (isLoaded) analysisResult ? localStorage.setItem(ANALYSIS_RESULT_KEY, JSON.stringify(analysisResult)) : localStorage.removeItem(ANALYSIS_RESULT_KEY); }, [analysisResult, isLoaded]);
-  useEffect(() => { if (isLoaded) narrativeOutline ? localStorage.setItem(NARRATIVE_OUTLINE_KEY, narrativeOutline) : localStorage.removeItem(NARRATIVE_OUTLINE_KEY); }, [narrativeOutline, isLoaded]);
-  useEffect(() => { if (isLoaded) desiredTone ? localStorage.setItem(DESIRED_TONE_KEY, desiredTone) : localStorage.removeItem(DESIRED_TONE_KEY); }, [desiredTone, isLoaded]);
-  useEffect(() => { if (isLoaded) desiredLength ? localStorage.setItem(DESIRED_LENGTH_KEY, desiredLength) : localStorage.removeItem(DESIRED_LENGTH_KEY); }, [desiredLength, isLoaded]);
-  useEffect(() => { if (isLoaded) keyThemes ? localStorage.setItem(KEY_THEMES_KEY, keyThemes) : localStorage.removeItem(KEY_THEMES_KEY); }, [keyThemes, isLoaded]);
-  useEffect(() => { if (isLoaded) adventureLanguage ? localStorage.setItem(ADVENTURE_LANGUAGE_KEY, adventureLanguage) : localStorage.removeItem(ADVENTURE_LANGUAGE_KEY); }, [adventureLanguage, isLoaded]); // Save language
+  useEffect(() => { if (isLoaded && storyText) localStorage.setItem(STORY_TEXT_KEY, storyText); else if (isLoaded) localStorage.removeItem(STORY_TEXT_KEY); }, [storyText, isLoaded]);
+  useEffect(() => { if (isLoaded && characterDescription) localStorage.setItem(CHARACTER_DESC_KEY, characterDescription); else if (isLoaded) localStorage.removeItem(CHARACTER_DESC_KEY); }, [characterDescription, isLoaded]);
+  useEffect(() => { if (isLoaded && analysisResult) localStorage.setItem(ANALYSIS_RESULT_KEY, JSON.stringify(analysisResult)); else if (isLoaded) localStorage.removeItem(ANALYSIS_RESULT_KEY); }, [analysisResult, isLoaded]);
+  useEffect(() => { if (isLoaded && narrativeOutline) localStorage.setItem(NARRATIVE_OUTLINE_KEY, narrativeOutline); else if (isLoaded) localStorage.removeItem(NARRATIVE_OUTLINE_KEY); }, [narrativeOutline, isLoaded]);
+  useEffect(() => { if (isLoaded && desiredTone) localStorage.setItem(DESIRED_TONE_KEY, desiredTone); else if (isLoaded) localStorage.removeItem(DESIRED_TONE_KEY); }, [desiredTone, isLoaded]);
+  useEffect(() => { if (isLoaded && desiredLength) localStorage.setItem(DESIRED_LENGTH_KEY, desiredLength); else if (isLoaded) localStorage.removeItem(DESIRED_LENGTH_KEY); }, [desiredLength, isLoaded]);
+  useEffect(() => { if (isLoaded && keyThemes) localStorage.setItem(KEY_THEMES_KEY, keyThemes); else if (isLoaded) localStorage.removeItem(KEY_THEMES_KEY); }, [keyThemes, isLoaded]);
+  useEffect(() => { if (isLoaded && adventureLanguage) localStorage.setItem(ADVENTURE_LANGUAGE_KEY, adventureLanguage); else if (isLoaded) localStorage.removeItem(ADVENTURE_LANGUAGE_KEY); }, [adventureLanguage, isLoaded]);
   useEffect(() => { if (isLoaded) localStorage.setItem(CREATION_STEP_KEY, creationStep); }, [creationStep, isLoaded]);
 
-  useEffect(() => { if (isLoaded) gameData ? localStorage.setItem(GAME_DATA_KEY, JSON.stringify(gameData)) : localStorage.removeItem(GAME_DATA_KEY); }, [gameData, isLoaded]);
-  useEffect(() => { if (isLoaded) currentSceneId ? localStorage.setItem(CURRENT_SCENE_ID_KEY, currentSceneId) : localStorage.removeItem(CURRENT_SCENE_ID_KEY); }, [currentSceneId, isLoaded]);
-  useEffect(() => { if (isLoaded) gameHistory.length > 0 ? localStorage.setItem(GAME_HISTORY_KEY, JSON.stringify(gameHistory)) : localStorage.removeItem(GAME_HISTORY_KEY); }, [gameHistory, isLoaded]);
+  useEffect(() => { if (isLoaded && gameData) localStorage.setItem(GAME_DATA_KEY, JSON.stringify(gameData)); else if (isLoaded) localStorage.removeItem(GAME_DATA_KEY); }, [gameData, isLoaded]);
+  useEffect(() => { if (isLoaded && currentSceneId) localStorage.setItem(CURRENT_SCENE_ID_KEY, currentSceneId); else if (isLoaded) localStorage.removeItem(CURRENT_SCENE_ID_KEY); }, [currentSceneId, isLoaded]);
+  useEffect(() => { if (isLoaded && gameHistory.length > 0) localStorage.setItem(GAME_HISTORY_KEY, JSON.stringify(gameHistory)); else if (isLoaded) localStorage.removeItem(GAME_HISTORY_KEY); }, [gameHistory, isLoaded]);
 
-  useEffect(() => { if (isLoaded) playerInventory.length > 0 ? localStorage.setItem(PLAYER_INVENTORY_KEY, JSON.stringify(playerInventory)) : localStorage.removeItem(PLAYER_INVENTORY_KEY); }, [playerInventory, isLoaded]);
-  useEffect(() => { if (isLoaded) playerStatusEffects.length > 0 ? localStorage.setItem(PLAYER_STATUS_EFFECTS_KEY, JSON.stringify(playerStatusEffects)) : localStorage.removeItem(PLAYER_STATUS_EFFECTS_KEY); }, [playerStatusEffects, isLoaded]);
+  useEffect(() => { if (isLoaded && playerInventory.length > 0) localStorage.setItem(PLAYER_INVENTORY_KEY, JSON.stringify(playerInventory)); else if (isLoaded) localStorage.removeItem(PLAYER_INVENTORY_KEY); }, [playerInventory, isLoaded]);
+  useEffect(() => { if (isLoaded && playerStatusEffects.length > 0) localStorage.setItem(PLAYER_STATUS_EFFECTS_KEY, JSON.stringify(playerStatusEffects)); else if (isLoaded) localStorage.removeItem(PLAYER_STATUS_EFFECTS_KEY); }, [playerStatusEffects, isLoaded]);
   useEffect(() => { if (isLoaded) localStorage.setItem(PLAYER_ALIGNMENT_KEY, JSON.stringify(playerAlignment)); }, [playerAlignment, isLoaded]); 
 
   useEffect(() => { if (isLoaded) localStorage.setItem(SAVED_ADVENTURES_KEY, JSON.stringify(savedAdventures)); }, [savedAdventures, isLoaded]);
   useEffect(() => { if (isLoaded) localStorage.setItem(SAVED_CHARACTERS_KEY, JSON.stringify(savedCharacters)); }, [savedCharacters, isLoaded]);
+  useEffect(() => { if (isLoaded) localStorage.setItem(SAVED_PLAYTHROUGHS_KEY, JSON.stringify(savedPlaythroughs)); }, [savedPlaythroughs, isLoaded]); // Save playthroughs
 
   const setStoryText = useCallback((text: string | null) => setStoryTextState(text), []);
   const setCharacterDescription = useCallback((desc: string | null) => setCharacterDescriptionState(desc), []);
@@ -305,7 +319,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
   const setDesiredTone = useCallback((tone: DesiredTone) => setDesiredToneState(tone), []);
   const setDesiredLength = useCallback((length: DesiredLength) => setDesiredLengthState(length), []);
   const setKeyThemes = useCallback((themes: string | null) => setKeyThemesState(themes), []);
-  const setAdventureLanguage = useCallback((lang: AdventureLanguage) => setAdventureLanguageState(lang), []); // New setter
+  const setAdventureLanguage = useCallback((lang: AdventureLanguage) => setAdventureLanguageState(lang), []);
   
   const setCreationStep = useCallback((step: CreationStep) => setCreationStepState(step), []);
   const setIsLoading = useCallback((loading: boolean) => setIsLoadingState(loading), []);
@@ -378,7 +392,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
   }, [toast]);
 
   const resetFullGame = useCallback(() => {
-    resetCreationProgress(); // This now also resets adventureLanguage
+    resetCreationProgress();
     setGameDataState(null);
     setCurrentSceneIdState(null);
     setGameHistoryState([]);
@@ -406,10 +420,16 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
       setPlayerAlignmentState(0); 
       
       if (data.storyText) setStoryTextState(data.storyText);
+      else setStoryTextState(null); // Clear if not in imported data
       if (data.characterDescription) setCharacterDescriptionState(data.characterDescription);
+      else setCharacterDescriptionState(null);
       if (data.analysisResult) setAnalysisResultState(data.analysisResult);
+      else setAnalysisResultState(null);
       if (data.narrativeOutline) setNarrativeOutlineState(data.narrativeOutline);
-      if (data.language) setAdventureLanguageState(data.language as AdventureLanguage); // Set language from imported gameData
+      else setNarrativeOutlineState(null);
+      if (data.language) setAdventureLanguageState(data.language as AdventureLanguage);
+      else setAdventureLanguageState("en-US"); // Default if not in imported data
+
 
     } else if (!data) { 
       setCurrentSceneIdState(null);
@@ -438,7 +458,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
       ...gameData,
       id: gameData.id || crypto.randomUUID(),
       adventureName: name,
-      language: adventureLanguage, // Ensure language is saved with the adventure
+      language: adventureLanguage,
     };
 
     setSavedAdventuresState(prevAdventures => {
@@ -453,10 +473,12 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
     });
     if (!gameData.id || gameData.adventureName !== adventureToSave.adventureName || gameData.language !== adventureToSave.language) {
         setGameDataState(prevGameData => ({
-            ...prevGameData!, 
+            ...(prevGameData || {} as GameData), // Ensure prevGameData is not null
             id: adventureToSave.id, 
             adventureName: adventureToSave.adventureName,
-            language: adventureToSave.language
+            language: adventureToSave.language,
+            startSceneId: prevGameData?.startSceneId || "", // Ensure startSceneId is present
+            scenes: prevGameData?.scenes || {}, // Ensure scenes is present
         }));
     }
     return true;
@@ -466,7 +488,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
     const adventureToLoad = savedAdventures.find(adv => adv.id === adventureId);
     if (adventureToLoad) {
       setGameDataInternal(adventureToLoad); 
-      if (adventureToLoad.language) { // Also set context language if present
+      if (adventureToLoad.language) {
         setAdventureLanguageState(adventureToLoad.language as AdventureLanguage);
       }
       setCreationStepState('generate'); 
@@ -531,6 +553,16 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
     return savedCharacters.find(p => p.id === characterId);
   }, [savedCharacters]);
 
+  const addSavedPlaythrough = useCallback((playthroughData: Omit<SavedPlaythrough, 'id' | 'dateGenerated'>) => {
+    const newPlaythrough: SavedPlaythrough = {
+      ...playthroughData,
+      id: crypto.randomUUID(),
+      dateGenerated: new Date().toISOString(),
+    };
+    setSavedPlaythroughsState(prev => [newPlaythrough, ...prev.slice(0, 19)]); // Keep latest 20
+    toast({ title: "Playthrough Story Saved!", description: "Your story has been saved to your journal.", className: "bg-primary text-primary-foreground"});
+  }, [toast]);
+
 
   if (!isLoaded) {
     return null;
@@ -545,7 +577,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
       desiredTone, setDesiredTone,
       desiredLength, setDesiredLength,
       keyThemes, setKeyThemes,
-      adventureLanguage, setAdventureLanguage, // Expose language
+      adventureLanguage, setAdventureLanguage,
 
       gameData, setGameData: setGameDataInternal,
       currentSceneId, setCurrentSceneId,
@@ -571,6 +603,9 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
       saveCharacterProfile,
       deleteCharacterProfile,
       getCharacterProfileById,
+
+      savedPlaythroughs,
+      addSavedPlaythrough,
 
       resetCreationProgress,
       resetFullGame,

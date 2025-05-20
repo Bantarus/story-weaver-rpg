@@ -35,7 +35,7 @@ const AnalysisResultSchemaForStory = z.object({
 const GeneratePlaythroughStoryInputSchema = z.object({
   gameTitle: z.string().optional().describe("The title of the adventure."),
   originalStoryText: z.string().optional().describe("The original source story text that the adventure was based on. This provides overall context."),
-  analysisResult: AnalysisResultSchemaForStory,
+  analysisResult: AnalysisResultSchemaForStory, // Updated to use the defined schema
   playedPath: z.array(PlayedSceneInfoSchema).describe("An ordered array representing the player's exact path through the game. Each element contains the details of a visited scene and the choice made from it."),
   characterDescription: z.string().optional().describe("The original description of the player's character."),
   playerAlignment: z.number().optional().describe("The player's final alignment score."),
@@ -111,13 +111,13 @@ The outcome was: {{endingType}}
 
 Narrative Construction Rules (Output in {{{aiSettings.language}}}, aim for a detailed, novelistic style):
 
-1.  **Treat Each 'playedPath' Element as a Chapter/Major Segment:** For each element in the 'playedPath' array, craft a substantial narrative portion.
-2.  **Elaborate on 'sceneText':** Use the provided 'sceneText' as the foundation for the chapter. Expand upon it significantly. Describe the environment in detail, portray the character's actions, internal thoughts, emotions, and any dialogues or interactions that occur. Make it immersive.
-3.  **Narrate Transitions and Consequences:** If 'chosenChoiceText' is present for a chapter, this is critical. Narrate how the character's decision (the 'chosenChoiceText') led them to the next situation. Describe the immediate consequences of their choice, the journey (if any) to the next scene, or the unfolding events that bridge the gap. Make these transitions smooth and logical.
+1.  **Treat Each 'playedPath' Element as a Chapter/Major Segment:** For each element in the 'playedPath' array, craft a substantial narrative portion. Each chapter should significantly expand upon the provided scene data.
+2.  **Elaborate on 'sceneText':** Use the provided 'sceneText' as the foundation for the chapter. Expand upon it significantly. Describe the environment in vivid detail, portray the character's actions, internal thoughts, emotions, and any dialogues or interactions that occur. Make it immersive.
+3.  **Narrate Transitions and Consequences:** If 'chosenChoiceText' is present for a chapter, this is critical. Narrate how the character's decision (the 'chosenChoiceText') led them to the next situation. Describe the immediate consequences of their choice, the journey (if any) to the next scene, or the unfolding events that bridge the gap. Make these transitions smooth and logical, effectively connecting the chapters.
 4.  **Maintain Character Focus:** Keep the narrative focused on the player character's experiences and perspective.
 5.  **Contextual Consistency:** Weave in elements from the 'originalStoryText' and 'analysisResult' where appropriate to enrich the world and maintain thematic consistency.
 6.  **Concluding Chapter:** The final chapter of your story must be based on the 'sceneText' and 'endingType' of the *last* scene in the 'playedPath' array. Develop this ending fully, reflecting the culmination of the player's journey.
-7.  **Length and Detail:** Aim for a detailed and expansive narrative. Each "chapter" should feel fleshed out. Don't just list events; describe them vividly.
+7.  **Length and Detail:** Aim for a detailed and expansive narrative. Each "chapter" should feel fleshed out. Don't just list events; describe them vividly. A short, three-scene playthrough should result in a multi-page story, not just three paragraphs.
 
 CRITICAL: Do NOT include scenes, choices, or outcomes that are not part of the provided 'playedPath'. The story must be a direct, though elaborated, account of the path taken by the player.
 Make the story engaging and highly readable in {{{aiSettings.language}}}.
@@ -152,3 +152,5 @@ const generatePlaythroughStoryFlow = ai.defineFlow(
     return output;
   }
 );
+
+    

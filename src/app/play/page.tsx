@@ -36,7 +36,8 @@ export default function PlayPage() {
     isLoading: contextIsLoading, 
     error: contextError,
     resetFullGame,
-    restartCurrentAdventure 
+    restartCurrentAdventure,
+    addSavedPlaythrough // New context function
   } = useGame();
 
   const { aiProvider, ollamaModel, isSettingsLoaded } = useSettings(); 
@@ -182,6 +183,15 @@ export default function PlayPage() {
       setGeneratedStory(result.playthroughStory);
       setShowStoryDialog(true);
       toast({ title: "Story Generated!", description: "Your adventure narrative is ready.", className: "bg-primary text-primary-foreground" });
+      
+      // Save the generated story to GameContext/localStorage
+      addSavedPlaythrough({
+        adventureId: gameData.id,
+        adventureName: gameData.adventureName || gameData.title,
+        characterDescription: characterDescription || undefined,
+        storyText: result.playthroughStory,
+      });
+
     } catch (err) {
       console.error("Error generating playthrough story:", err);
       const errorMessage = err instanceof Error ? err.message : "An unknown error occurred during story generation.";
@@ -287,7 +297,7 @@ export default function PlayPage() {
           )}
         </CardContent>
          <CardFooter className="flex justify-center pt-0 pb-6">
-         {/* Removed restart button from here, will be added to end game screen if desired */}
+         {/* Restart button moved to end game screen */}
         </CardFooter>
       </Card>
 
@@ -444,7 +454,7 @@ export default function PlayPage() {
                 <DialogHeader>
                     <DialogTitle>Your Adventure Story</DialogTitle>
                     <DialogDescription>
-                        Here is the narrative of your unique journey. You can read it here or download it as a text file.
+                        Here is the narrative of your unique journey. You can read it here or download it as a text file. Your story has also been saved to your journal in the library.
                     </DialogDescription>
                 </DialogHeader>
                 <ScrollArea className="flex-grow p-1 pr-3 -mx-1 min-h-[200px]">
@@ -467,3 +477,5 @@ export default function PlayPage() {
     </div>
   );
 }
+
+    
