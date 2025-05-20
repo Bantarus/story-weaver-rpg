@@ -12,7 +12,7 @@ import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 
 // Schema for information about a single scene visited by the player
-export const PlayedSceneInfoSchema = z.object({
+const PlayedSceneInfoSchema = z.object({
   sceneId: z.string().describe("The ID of the scene that was visited."),
   sceneTitle: z.string().optional().describe("The title of the visited scene."),
   sceneText: z.string().describe("The narrative text of the visited scene."),
@@ -32,7 +32,7 @@ const AnalysisResultSchemaForStory = z.object({
 }).nullable().optional().describe("Structured analysis of the original story: plot points, characters, settings, themes, tone.");
 
 
-export const GeneratePlaythroughStoryInputSchema = z.object({
+const GeneratePlaythroughStoryInputSchema = z.object({
   gameTitle: z.string().optional().describe("The title of the adventure."),
   originalStoryText: z.string().optional().describe("The original source story text that the adventure was based on. This provides overall context."),
   analysisResult: AnalysisResultSchemaForStory,
@@ -49,7 +49,7 @@ export const GeneratePlaythroughStoryInputSchema = z.object({
 });
 export type GeneratePlaythroughStoryInput = z.infer<typeof GeneratePlaythroughStoryInputSchema>;
 
-export const GeneratePlaythroughStoryOutputSchema = z.object({
+const GeneratePlaythroughStoryOutputSchema = z.object({
   playthroughStory: z.string().describe("The generated narrative text of the player's unique playthrough, written in an engaging, novelistic style."),
 });
 export type GeneratePlaythroughStoryOutput = z.infer<typeof GeneratePlaythroughStoryOutputSchema>;
@@ -138,13 +138,13 @@ const generatePlaythroughStoryFlow = ai.defineFlow(
     outputSchema: GeneratePlaythroughStoryOutputSchema,
   },
   async (input) => {
-    let modelName = 'googleai/gemini-2.0-flash'; 
+    let modelName = 'googleai/gemini-2.0-flash';
     if (input.aiSettings?.provider === 'ollama' && input.aiSettings?.ollamaModel) {
       modelName = `ollama/${input.aiSettings.ollamaModel}`;
     }
 
     const promptInput = { ...input };
-    
+
     const { output } = await generatePlaythroughStoryPromptObj(promptInput, { model: modelName });
     if (!output || !output.playthroughStory) {
       throw new Error('AI failed to generate a playthrough story.');
@@ -152,5 +152,3 @@ const generatePlaythroughStoryFlow = ai.defineFlow(
     return output;
   }
 );
-
-    
