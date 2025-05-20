@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { useGame, type SceneNode, type SceneChoice, type AnalyzeSourceMaterialOutput } from "@/context/GameContext";
+import { useGame, type SceneNode, type SceneChoice, type AnalyzeSourceMaterialOutput, type Effect } from "@/context/GameContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Loader2, AlertCircle, ArrowLeft, Compass, Eye, Ear, RefreshCw, Briefcase, ShieldAlert, Scale as ScaleIcon, Sparkles, FileText, Download } from "lucide-react"; 
 import { GameHistoryDisplay } from "@/components/GameHistoryDisplay"; 
 import { Badge } from "@/components/ui/badge";
-import { generatePlaythroughStory, type GeneratePlaythroughStoryInput } from "@/ai/flows/generate-playthrough-story";
+import { generatePlaythroughStory, type GeneratePlaythroughStoryInput, type PlayedSceneInfo } from "@/ai/flows/generate-playthrough-story";
 import { useToast } from "@/hooks/use-toast";
 
 export default function PlayPage() {
@@ -25,7 +25,7 @@ export default function PlayPage() {
     gameHistory, 
     characterDescription,
     storyText, 
-    analysisResult, // Added to get analysis result
+    analysisResult,
     playerInventory,
     playerStatusEffects,
     playerAlignment, 
@@ -123,26 +123,46 @@ export default function PlayPage() {
     setStoryGenerationError(null);
 
     try {
-      // Simplify scenes for the AI flow as per its expected input schema
-      const simplifiedScenes: Record<string, any> = {};
-      for (const sceneId in gameData.scenes) {
+      const playedPath: PlayedSceneInfo[] = [];
+      for (let i = 0; i < gameHistory.length; i++) {
+        const sceneId = gameHistory[i];
         const scene = gameData.scenes[sceneId];
-        simplifiedScenes[sceneId] = {
-            id: scene.id,
-            title: scene.title,
-            text: scene.text,
-            choices: scene.choices.map(c => ({ text: c.text, nextNodeId: c.nextNodeId })),
-            isEnding: scene.isEnding,
-            endingType: scene.endingType,
-        };
+
+        if (!scene) {
+          console.warn(`Scene with ID ${sceneId} from history not found in gameData. Skipping.`);
+          continue;
+        }
+
+        let chosenChoiceText: string | undefined = undefined;
+        if (i < gameHistory.length - 1) {
+          const nextSceneIdInHistory = gameHistory[i+1];
+          const choiceMade = scene.choices.find(c => c.nextNodeId === nextSceneIdInHistory);
+          if (choiceMade) {
+            chosenChoiceText = choiceMade.text;
+          } else {
+             console.warn(`Could not find choice in scene ${sceneId} that leads to ${nextSceneIdInHistory}.`);
+          }
+        }
+        
+        playedPath.push({
+          sceneId: scene.id,
+          sceneTitle: scene.title,
+          sceneText: scene.text,
+          chosenChoiceText: chosenChoiceText,
+          isEnding: scene.isEnding,
+          endingType: scene.endingType,
+        });
+      }
+
+      if (playedPath.length === 0) {
+        throw new Error("Could not construct a valid played path from game history.");
       }
 
       const storyInput: GeneratePlaythroughStoryInput = {
         gameTitle: gameData.title,
         originalStoryText: storyText || undefined, 
-        analysisResult: analysisResult || undefined, // Pass the analysisResult
-        scenes: simplifiedScenes,
-        gameHistory: gameHistory,
+        analysisResult: analysisResult || undefined,
+        playedPath: playedPath,
         characterDescription: characterDescription || undefined,
         playerAlignment: playerAlignment,
         playerInventory: playerInventory.length > 0 ? playerInventory : undefined,
@@ -258,8 +278,8 @@ export default function PlayPage() {
             </div>
           )}
         </CardContent>
-        <CardFooter>
-           {/* Restart button moved to game end screen */}
+         <CardFooter className="flex justify-center pt-0 pb-6">
+           {/* Button moved to end screen, but footer kept for potential future use */}
         </CardFooter>
       </Card>
 
