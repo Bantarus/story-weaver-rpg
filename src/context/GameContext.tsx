@@ -25,7 +25,7 @@ const PLAYER_ALIGNMENT_KEY = 'storyWeaver_playerAlignment';
 
 const SAVED_ADVENTURES_KEY = 'storyWeaver_savedAdventures';
 const SAVED_CHARACTERS_KEY = 'storyWeaver_savedCharacters';
-const SAVED_PLAYTHROUGHS_KEY = 'storyWeaver_savedPlaythroughs'; // New key
+const SAVED_PLAYTHROUGHS_KEY = 'storyWeaver_savedPlaythroughs';
 
 // Character Profile Definition
 export interface CharacterProfile {
@@ -150,9 +150,8 @@ interface GameContextType {
   deleteCharacterProfile: (characterId: string) => void;
   getCharacterProfileById: (characterId: string) => CharacterProfile | undefined;
 
-  savedPlaythroughs: SavedPlaythrough[]; // New state
-  addSavedPlaythrough: (playthroughData: Omit<SavedPlaythrough, 'id' | 'dateGenerated'>) => void; // New function
-  // deleteSavedPlaythrough: (playthroughId: string) => void; // For later
+  savedPlaythroughs: SavedPlaythrough[];
+  addSavedPlaythrough: (playthroughData: Omit<SavedPlaythrough, 'id' | 'dateGenerated'>) => void;
 
   resetCreationProgress: () => void;
   resetFullGame: () => void;
@@ -188,7 +187,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
 
   const [savedAdventures, setSavedAdventuresState] = useState<GameData[]>([]);
   const [savedCharacters, setSavedCharactersState] = useState<CharacterProfile[]>([]);
-  const [savedPlaythroughs, setSavedPlaythroughsState] = useState<SavedPlaythrough[]>([]); // New state
+  const [savedPlaythroughs, setSavedPlaythroughsState] = useState<SavedPlaythrough[]>([]);
 
   const resetCreationProgress = useCallback(() => {
     setStoryTextState(null);
@@ -260,7 +259,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
     const storedSavedCharacters = localStorage.getItem(SAVED_CHARACTERS_KEY);
     if (storedSavedCharacters) setSavedCharactersState(JSON.parse(storedSavedCharacters));
 
-    const storedSavedPlaythroughs = localStorage.getItem(SAVED_PLAYTHROUGHS_KEY); // Load saved playthroughs
+    const storedSavedPlaythroughs = localStorage.getItem(SAVED_PLAYTHROUGHS_KEY);
     if (storedSavedPlaythroughs) setSavedPlaythroughsState(JSON.parse(storedSavedPlaythroughs));
 
     setIsLoaded(true);
@@ -310,7 +309,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => { if (isLoaded) localStorage.setItem(SAVED_ADVENTURES_KEY, JSON.stringify(savedAdventures)); }, [savedAdventures, isLoaded]);
   useEffect(() => { if (isLoaded) localStorage.setItem(SAVED_CHARACTERS_KEY, JSON.stringify(savedCharacters)); }, [savedCharacters, isLoaded]);
-  useEffect(() => { if (isLoaded) localStorage.setItem(SAVED_PLAYTHROUGHS_KEY, JSON.stringify(savedPlaythroughs)); }, [savedPlaythroughs, isLoaded]); // Save playthroughs
+  useEffect(() => { if (isLoaded) localStorage.setItem(SAVED_PLAYTHROUGHS_KEY, JSON.stringify(savedPlaythroughs)); }, [savedPlaythroughs, isLoaded]);
 
   const setStoryText = useCallback((text: string | null) => setStoryTextState(text), []);
   const setCharacterDescription = useCallback((desc: string | null) => setCharacterDescriptionState(desc), []);
@@ -420,7 +419,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
       setPlayerAlignmentState(0); 
       
       if (data.storyText) setStoryTextState(data.storyText);
-      else setStoryTextState(null); // Clear if not in imported data
+      else setStoryTextState(null);
       if (data.characterDescription) setCharacterDescriptionState(data.characterDescription);
       else setCharacterDescriptionState(null);
       if (data.analysisResult) setAnalysisResultState(data.analysisResult);
@@ -428,7 +427,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
       if (data.narrativeOutline) setNarrativeOutlineState(data.narrativeOutline);
       else setNarrativeOutlineState(null);
       if (data.language) setAdventureLanguageState(data.language as AdventureLanguage);
-      else setAdventureLanguageState("en-US"); // Default if not in imported data
+      else setAdventureLanguageState("en-US");
 
 
     } else if (!data) { 
@@ -473,12 +472,12 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
     });
     if (!gameData.id || gameData.adventureName !== adventureToSave.adventureName || gameData.language !== adventureToSave.language) {
         setGameDataState(prevGameData => ({
-            ...(prevGameData || {} as GameData), // Ensure prevGameData is not null
+            ...(prevGameData || {} as GameData), 
             id: adventureToSave.id, 
             adventureName: adventureToSave.adventureName,
             language: adventureToSave.language,
-            startSceneId: prevGameData?.startSceneId || "", // Ensure startSceneId is present
-            scenes: prevGameData?.scenes || {}, // Ensure scenes is present
+            startSceneId: prevGameData?.startSceneId || "", 
+            scenes: prevGameData?.scenes || {}, 
         }));
     }
     return true;
@@ -560,7 +559,9 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
       dateGenerated: new Date().toISOString(),
     };
     setSavedPlaythroughsState(prev => [newPlaythrough, ...prev.slice(0, 19)]); // Keep latest 20
-    toast({ title: "Playthrough Story Saved!", description: "Your story has been saved to your journal.", className: "bg-primary text-primary-foreground"});
+    setTimeout(() => {
+      toast({ title: "Playthrough Story Saved!", description: "Your story has been saved to your journal.", className: "bg-primary text-primary-foreground"});
+    }, 0);
   }, [toast]);
 
 
@@ -623,5 +624,7 @@ export const useGame = () => {
   }
   return context;
 };
+
+    
 
     

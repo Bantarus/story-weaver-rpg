@@ -1,8 +1,8 @@
 
 "use client";
 
-import { useState, useCallback } from 'react'; // Added useCallback
-import { useGame, type CharacterProfile, type GameData } from '@/context/GameContext'; // Added GameData
+import { useState, useCallback } from 'react';
+import { useGame, type CharacterProfile, type GameData, type SavedPlaythrough } from '@/context/GameContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from "@/components/ui/badge";
@@ -11,10 +11,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertCircle, Play, Trash2, BookOpenText, PlusCircle, Frown, LibraryBig, Users, UserCog, UserCircle2, Edit3, Save, XCircle, Download } from 'lucide-react'; // Added Download
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { AlertCircle, Play, Trash2, BookOpenText, PlusCircle, Frown, LibraryBig, Users, UserCog, UserCircle2, Edit3, Save, XCircle, Download, FileText, CalendarDays, Feather } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
+import { format } from 'date-fns';
 
 const commonArchetypes = [
   "Wandering Scholar",
@@ -32,13 +35,18 @@ const commonArchetypes = [
 export default function LibraryPage() {
   const { 
     savedAdventures, loadAdventureFromLibrary, deleteAdventureFromLibrary,
-    savedCharacters, saveCharacterProfile, deleteCharacterProfile
+    savedCharacters, saveCharacterProfile, deleteCharacterProfile,
+    savedPlaythroughs // Added savedPlaythroughs
+    // deleteSavedPlaythrough // For future implementation
   } = useGame();
   const router = useRouter();
   const { toast } = useToast();
 
   const [editingCharacterId, setEditingCharacterId] = useState<string | null>(null);
   const [editableCharacterData, setEditableCharacterData] = useState<Partial<Omit<CharacterProfile, 'id'>>>({});
+
+  const [currentReadingStory, setCurrentReadingStory] = useState<SavedPlaythrough | null>(null);
+  const [isReaderDialogOpen, setIsReaderDialogOpen] = useState(false);
 
   const handlePlayAdventure = (adventureId: string) => {
     if (loadAdventureFromLibrary(adventureId)) {
@@ -136,6 +144,30 @@ export default function LibraryPage() {
     });
   };
 
+  const handleOpenReaderDialog = (story: SavedPlaythrough) => {
+    setCurrentReadingStory(story);
+    setIsReaderDialogOpen(true);
+  };
+
+  const downloadStoryText = (storyText: string, filename: string = "my-adventure-story.txt") => {
+    const element = document.createElement("a");
+    const file = new Blob([storyText], {type: 'text/plain;charset=utf-8'});
+    element.href = URL.createObjectURL(file);
+    element.download = filename;
+    document.body.appendChild(element); 
+    element.click();
+    document.body.removeChild(element);
+    URL.revokeObjectURL(element.href);
+  };
+
+  // Function to get a snippet of text
+  const getSnippet = (text: string, maxLength = 150) => {
+    if (!text) return "No preview available.";
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength) + "...";
+  };
+
+
   return (
     <div className="max-w-5xl mx-auto space-y-8">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -150,12 +182,15 @@ export default function LibraryPage() {
       </div>
 
       <Tabs defaultValue="adventures" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="adventures" className="text-base py-2.5">
             <BookOpenText className="mr-2 h-5 w-5" /> Saved Adventures
           </TabsTrigger>
           <TabsTrigger value="characters" className="text-base py-2.5">
             <Users className="mr-2 h-5 w-5" /> Saved Characters
+          </TabsTrigger>
+          <TabsTrigger value="journal" className="text-base py-2.5">
+            <Feather className="mr-2 h-5 w-5" /> My Journal
           </TabsTrigger>
         </TabsList>
 
@@ -381,7 +416,89 @@ export default function LibraryPage() {
             </div>
           )}
         </TabsContent>
+
+        <TabsContent value="journal" className="mt-6">
+          {savedPlaythroughs.length === 0 ? (
+            <Card className="text-center py-12 shadow-lg">
+              <CardHeader>
+                <Feather className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
+                <CardTitle className="text-2xl">Your Journal is Empty</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CardDescription className="text-lg">
+                  You haven&apos;t generated and saved any playthrough stories yet.
+                </CardDescription>
+                <p className="mt-2 text-muted-foreground">
+                  Play an adventure to its end and choose to &quot;Generate My Story&quot; to save it here!
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {savedPlaythroughs.map((story) => (
+                <Card key={story.id} className="shadow-lg flex flex-col hover:shadow-xl transition-shadow duration-200">
+                  <CardHeader>
+                    <CardTitle className="line-clamp-2 flex items-center gap-2">
+                        <FileText size={24} className="text-primary" /> 
+                        {story.adventureName || "My Adventure Story"}
+                    </CardTitle>
+                    <CardDescription className="text-xs text-muted-foreground flex items-center gap-1">
+                        <CalendarDays size={14} /> Generated: {format(new Date(story.dateGenerated), "MMM d, yyyy")}
+                    </CardDescription>
+                     {story.characterDescription && (
+                        <p className="text-xs text-muted-foreground mt-1 line-clamp-1">
+                            Character: {story.characterDescription.split('\n')[0].replace('Name: ', '')}
+                        </p>
+                    )}
+                  </CardHeader>
+                  <CardContent className="flex-grow">
+                    <p className="text-sm text-muted-foreground line-clamp-4 h-[80px] overflow-hidden">
+                      {getSnippet(story.storyText)}
+                    </p>
+                  </CardContent>
+                  <CardFooter className="border-t pt-4 mt-auto">
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => handleOpenReaderDialog(story)}
+                    >
+                      <BookOpenText className="mr-2" size={18} /> Read Story
+                    </Button>
+                    {/* Add Delete Story button here later */}
+                  </CardFooter>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
       </Tabs>
+
+      {currentReadingStory && (
+        <Dialog open={isReaderDialogOpen} onOpenChange={setIsReaderDialogOpen}>
+            <DialogContent className="sm:max-w-2xl md:max-w-3xl lg:max-w-4xl max-h-[90vh] flex flex-col">
+                <DialogHeader>
+                    <DialogTitle className="text-2xl text-primary">{currentReadingStory.adventureName || "My Adventure Story"}</DialogTitle>
+                    <DialogDescription>
+                        Generated on {format(new Date(currentReadingStory.dateGenerated), "PPPp")}
+                        {currentReadingStory.characterDescription && 
+                            <span className="block mt-1">Character: {currentReadingStory.characterDescription.split('\n')[0].replace('Name: ', '')}</span>
+                        }
+                    </DialogDescription>
+                </DialogHeader>
+                <ScrollArea className="flex-grow p-1 pr-4 -mx-1 my-4 min-h-[300px] border rounded-md bg-background">
+                   <div className="prose prose-sm sm:prose lg:prose-lg xl:prose-xl max-w-none p-4 text-foreground whitespace-pre-line">
+                        {currentReadingStory.storyText}
+                   </div>
+                </ScrollArea>
+                <DialogFooter className="gap-2 sm:gap-0">
+                     <Button variant="outline" onClick={() => downloadStoryText(currentReadingStory.storyText, `${currentReadingStory.adventureName || "MyStory"}_playthrough.txt`)}>
+                        <Download className="mr-2 h-4 w-4" /> Download (.txt)
+                    </Button>
+                    <Button onClick={() => setIsReaderDialogOpen(false)}>Close</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
