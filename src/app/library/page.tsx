@@ -10,10 +10,24 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertCircle, Play, Trash2, BookOpenText, PlusCircle, Frown, LibraryBig, Users, UserCog, UserCircle2, Edit3, Save, XCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
+
+const commonArchetypes = [
+  "Wandering Scholar",
+  "Cursed Knight",
+  "Resourceful Scoundrel",
+  "Mystic Scribe",
+  "Stealthy Rogue",
+  "Noble Paladin",
+  "Wise Hermit",
+  "Dashing Swashbuckler",
+  "Pragmatic Mercenary",
+  "Inquisitive Investigator"
+];
 
 export default function LibraryPage() {
   const { 
@@ -67,18 +81,18 @@ export default function LibraryPage() {
   };
 
   const handleSaveCharacterChanges = () => {
-    if (!editingCharacterId || !editableCharacterData.name || !editableCharacterData.archetype || !editableCharacterData.background || !editableCharacterData.goals) {
+    if (!editingCharacterId || !editableCharacterData.name?.trim() || !editableCharacterData.archetype?.trim() || !editableCharacterData.background?.trim() || !editableCharacterData.goals?.trim()) {
       toast({ variant: "destructive", title: "Save Error", description: "All character fields must be filled." });
       return;
     }
     saveCharacterProfile({
       id: editingCharacterId,
-      name: editableCharacterData.name,
-      archetype: editableCharacterData.archetype,
-      background: editableCharacterData.background,
-      goals: editableCharacterData.goals,
+      name: editableCharacterData.name.trim(),
+      archetype: editableCharacterData.archetype.trim(),
+      background: editableCharacterData.background.trim(),
+      goals: editableCharacterData.goals.trim(),
     });
-    toast({ title: "Character Updated", description: `"${editableCharacterData.name}" has been updated.`, className: "bg-primary text-primary-foreground" });
+    toast({ title: "Character Updated", description: `"${editableCharacterData.name.trim()}" has been updated.`, className: "bg-primary text-primary-foreground" });
     handleCancelEditCharacter();
   };
   
@@ -209,7 +223,7 @@ export default function LibraryPage() {
                     // EDIT MODE
                     <>
                       <CardHeader className="pb-3">
-                        <div className="flex items-center gap-3 mb-1">
+                        <div className="flex items-center gap-3 mb-2">
                           <UserCircle2 className="h-10 w-10 text-primary flex-shrink-0" />
                           <div className="flex-grow">
                             <Label htmlFor={`edit-char-name-${character.id}`}>Name</Label>
@@ -218,20 +232,36 @@ export default function LibraryPage() {
                               value={editableCharacterData.name || ''}
                               onChange={(e) => handleEditableDataChange('name', e.target.value)}
                               placeholder="Character Name"
+                              className="text-base"
                             />
                           </div>
                         </div>
                         <div>
-                          <Label htmlFor={`edit-char-archetype-${character.id}`}>Archetype</Label>
-                          <Input
-                            id={`edit-char-archetype-${character.id}`}
+                          <Label htmlFor={`edit-char-archetype-${character.id}`}>Archetype/Class</Label>
+                          <Select
                             value={editableCharacterData.archetype || ''}
-                            onChange={(e) => handleEditableDataChange('archetype', e.target.value)}
-                            placeholder="Archetype/Class"
-                          />
+                            onValueChange={(value) => handleEditableDataChange('archetype', value)}
+                          >
+                            <SelectTrigger id={`edit-char-archetype-${character.id}`} className="text-base">
+                              <SelectValue placeholder="Select archetype..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {commonArchetypes.map(archetype => (
+                                <SelectItem key={archetype} value={archetype} className="text-base">
+                                  {archetype}
+                                </SelectItem>
+                              ))}
+                               {/* Add option for current archetype if not in common list */}
+                               {editableCharacterData.archetype && !commonArchetypes.includes(editableCharacterData.archetype) && (
+                                <SelectItem value={editableCharacterData.archetype} className="text-base">
+                                  {editableCharacterData.archetype} (Custom)
+                                </SelectItem>
+                              )}
+                            </SelectContent>
+                          </Select>
                         </div>
                       </CardHeader>
-                      <CardContent className="flex-grow pt-0 space-y-3">
+                      <CardContent className="flex-grow pt-2 space-y-3">
                         <div>
                           <Label htmlFor={`edit-char-background-${character.id}`}>Background</Label>
                           <Textarea
@@ -239,7 +269,8 @@ export default function LibraryPage() {
                             value={editableCharacterData.background || ''}
                             onChange={(e) => handleEditableDataChange('background', e.target.value)}
                             placeholder="Background story..."
-                            rows={3}
+                            rows={4}
+                            className="text-base"
                           />
                         </div>
                         <div>
@@ -250,6 +281,7 @@ export default function LibraryPage() {
                             onChange={(e) => handleEditableDataChange('goals', e.target.value)}
                             placeholder="Personal goals..."
                             rows={3}
+                            className="text-base"
                           />
                         </div>
                       </CardContent>
@@ -270,17 +302,21 @@ export default function LibraryPage() {
                           <UserCircle2 className="h-10 w-10 text-primary flex-shrink-0" />
                           <CardTitle className="line-clamp-2 text-xl">{character.name}</CardTitle>
                         </div>
-                        <Badge variant="secondary" className="w-fit">{character.archetype}</Badge>
+                        <Badge variant="secondary" className="w-fit text-sm py-1">{character.archetype}</Badge>
                       </CardHeader>
-                      <CardContent className="flex-grow pt-0">
-                         <Label className="text-xs text-muted-foreground font-semibold">Background:</Label>
-                         <p className="text-sm text-foreground line-clamp-3 h-[60px] overflow-hidden mb-2">
-                            {character.background || "No background provided."}
-                         </p>
-                         <Label className="text-xs text-muted-foreground font-semibold">Goals:</Label>
-                         <p className="text-sm text-foreground line-clamp-2 h-[40px] overflow-hidden">
-                            {character.goals || "No goals provided."}
-                         </p>
+                      <CardContent className="flex-grow pt-0 space-y-3">
+                         <div>
+                            <Label className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">Background:</Label>
+                            <p className="text-sm text-foreground line-clamp-3 max-h-[60px] overflow-hidden">
+                                {character.background || "No background provided."}
+                            </p>
+                         </div>
+                         <div>
+                            <Label className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">Goals:</Label>
+                            <p className="text-sm text-foreground line-clamp-2 max-h-[40px] overflow-hidden">
+                                {character.goals || "No goals provided."}
+                            </p>
+                         </div>
                       </CardContent>
                       <CardFooter className="flex justify-end gap-2 border-t pt-4 mt-auto">
                         <Button
