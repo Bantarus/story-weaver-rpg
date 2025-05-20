@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useGame, type GameData, type SceneNode, type DesiredTone, type DesiredLength, type CharacterProfile } from "@/context/GameContext";
 import { useSettings } from "@/context/SettingsContext";
@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, BookText, UserPlus, Wand2, AlertCircle, CheckCircle, Play, Palette, Scale, Sparkles, RefreshCcw, Save, LibraryBig, UserCheck, Download } from "lucide-react";
+import { Loader2, BookText, UserPlus, Wand2, AlertCircle, CheckCircle, Play, Palette, Scale, Sparkles, RefreshCcw, Save, LibraryBig, UserCheck, Download, FileUp } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 import { analyzeSourceMaterial } from "@/ai/flows/analyze-source-material";
@@ -60,6 +60,8 @@ export default function CreatePage() {
 
   const [loadedCharId, setLoadedCharId] = useState<string | null>(null);
   const [selectedLibraryCharId, setSelectedLibraryCharId] = useState<string | undefined>(undefined);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
 
   useEffect(() => {
@@ -340,6 +342,66 @@ export default function CreatePage() {
     }
   }, [gameData, toast]);
 
+  const handleImportButtonClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      toast({ variant: "destructive", title: "Import Failed", description: "No file selected." });
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+    const reader = new FileReader();
+
+    reader.onload = async (e) => {
+      try {
+        const content = e.target?.result as string;
+        const parsedData = JSON.parse(content);
+
+        // Basic validation (can be expanded with Zod later if needed)
+        if (typeof parsedData.startSceneId === 'string' && typeof parsedData.scenes === 'object' && parsedData.scenes !== null) {
+          setGameData(parsedData as GameData);
+          setStoryText("Imported Adventure: " + (parsedData.title || "Untitled Adventure"));
+          setCharacterDescription("Character for imported adventure."); // Or derive from imported data if available
+          setNarrativeOutline("Narrative from imported adventure."); // Or derive
+          setAnalysisResult(null); // Reset analysis as it's from imported data
+          setCreationStep('generate');
+          toast({ title: "Adventure Imported!", description: "The game data has been loaded.", className: "bg-primary text-primary-foreground" });
+        } else {
+          throw new Error("Invalid game data structure. Missing 'startSceneId' or 'scenes'.");
+        }
+      } catch (importError) {
+        console.error("Error importing game data:", importError);
+        const errorMsg = importError instanceof Error ? importError.message : "Failed to parse or validate the adventure file.";
+        setError(errorMsg);
+        setCreationStep('error'); // Go to error step to display message
+        toast({ variant: "destructive", title: "Import Failed", description: errorMsg });
+      } finally {
+        setIsLoading(false);
+        // Reset file input value to allow importing the same file again
+        if (event.target) {
+          event.target.value = '';
+        }
+      }
+    };
+
+    reader.onerror = () => {
+      setError("Failed to read the adventure file.");
+      setCreationStep('error');
+      toast({ variant: "destructive", title: "Import Failed", description: "Could not read the selected file." });
+      setIsLoading(false);
+       if (event.target) {
+          event.target.value = '';
+        }
+    };
+
+    reader.readAsText(file);
+  };
+
 
   const handleTryAgainOnError = () => {
     setError(null);
@@ -365,7 +427,7 @@ export default function CreatePage() {
       setCharGoalsLocal(charProfile.goals);
       setLoadedCharId(charProfile.id);
       const fullDesc = `Name: ${charProfile.name}\nArchetype: ${charProfile.archetype}\nBackground: ${charProfile.background}\nGoals: ${charProfile.goals}`;
-      setCharacterDescription(fullDesc);
+      setCharacterDescription(fullDesc); // Update context
       toast({ title: "Character Loaded", description: `"${charProfile.name}" has been loaded into the form.`, className: "bg-primary text-primary-foreground" });
     } else {
       toast({ variant: "destructive", title: "Load Failed", description: "Could not find the selected character." });
@@ -378,14 +440,14 @@ export default function CreatePage() {
       return;
     }
     const characterDataToSave: Omit<CharacterProfile, 'id'> & { id?: string } = {
-      id: loadedCharId || undefined,
+      id: loadedCharId || undefined, // Pass ID if updating an existing loaded char
       name: charName.trim(),
       archetype: charArchetype.trim(),
       background: charBackground.trim(),
       goals: charGoals.trim(),
     };
     const savedProfile = saveCharacterProfile(characterDataToSave);
-    setLoadedCharId(savedProfile.id);
+    setLoadedCharId(savedProfile.id); // Ensure loadedCharId is set to the (potentially new) ID
     toast({ title: "Character Saved!", description: `"${savedProfile.name}" has been saved to your library.`, className: "bg-primary text-primary-foreground" });
   };
 
@@ -403,13 +465,22 @@ export default function CreatePage() {
     } else {
       saveCharButtonText = "Update Character in Library";
     }
-  } else if (charName.trim() && charArchetype.trim() && charBackground.trim() && charGoals.trim() && savedCharacters.some(c =>
-      c.name === charName.trim() &&
-      c.archetype === charArchetype.trim() &&
-      c.background === charBackground.trim() &&
-      c.goals === charGoals.trim()
-    )) {
-      // Scenario: Form matches an existing character in library, but it wasn't explicitly loaded.
+  } else if (charName.trim() && charArchetype.trim() && charBackground.trim() && charGoals.trim()) {
+     const existingChar = savedCharacters.find(c =>
+        c.name === charName.trim() &&
+        c.archetype === charArchetype.trim() &&
+        c.background === charBackground.trim() &&
+        c.goals === charGoals.trim()
+      );
+      if (existingChar) {
+        // Scenario: Form matches an existing character in library, but it wasn't explicitly loaded.
+        // To avoid accidental overwrite or creating a duplicate name, we could prompt or disable direct save.
+        // For now, let's assume if it matches an existing one and not loaded, save will create a new one (if IDs differ)
+        // or update if the user intends to save under the same "implicit" profile by name.
+        // The current `saveCharacterProfile` logic handles new vs update based on passed ID.
+        // Here, we can set loadedCharId if it's a perfect match, to enable "Update" behavior for the button.
+         // setLoadedCharId(existingChar.id); // This could be too implicit.
+      }
   }
 
 
@@ -453,6 +524,26 @@ export default function CreatePage() {
           </div>
         </Alert>
       )}
+
+      <input
+        type="file"
+        accept=".json"
+        style={{ display: 'none' }}
+        ref={fileInputRef}
+        onChange={handleFileImport}
+      />
+      <Card className="shadow-lg">
+        <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-xl"><FileUp /> Or Import an Existing Adventure</CardTitle>
+            <CardDescription>Have an adventure file? Upload it here to continue your journey or explore a shared story.</CardDescription>
+        </CardHeader>
+        <CardContent>
+            <Button onClick={handleImportButtonClick} variant="outline" className="w-full" disabled={isLoading}>
+                <FileUp className="mr-2 h-4 w-4" /> Import Adventure File (.json)
+            </Button>
+        </CardContent>
+      </Card>
+
 
       {creationStep === "story" && !error &&(
         <Card className="shadow-lg">
@@ -624,7 +715,7 @@ export default function CreatePage() {
             )}
             {gameData && (
               <CardDescription>
-                Your adventure "{gameData.adventureName || gameData.title || "Untitled Adventure"}" is woven! You can save it to your library, export it, or play it now.
+                Your adventure "{gameData.adventureName || gameData.title || "Untitled Adventure"}" is woven! You can save it to your library, export it, import another, or play it now.
               </CardDescription>
             )}
           </CardHeader>
@@ -642,7 +733,7 @@ export default function CreatePage() {
                 <CheckCircle className="h-4 w-4 !text-green-700" />
                 <AlertTitle>Ready to Go!</AlertTitle>
                 <AlertDescription>
-                  Your adventure data has been successfully generated.
+                  Your adventure data has been successfully generated or loaded.
                   {gameData.title && <p className="mt-1"><strong>Title:</strong> {gameData.title}</p>}
                    {gameData.scenes && gameData.startSceneId && gameData.scenes[gameData.startSceneId] &&
                     <p className="mt-1"><strong>Start Scene:</strong> {gameData.scenes[gameData.startSceneId]?.title || gameData.startSceneId}</p>
@@ -686,6 +777,3 @@ export default function CreatePage() {
     </div>
   );
 }
-
-    
-    
