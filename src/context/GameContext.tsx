@@ -23,6 +23,16 @@ const PLAYER_STATUS_EFFECTS_KEY = 'storyWeaver_playerStatusEffects';
 const PLAYER_ALIGNMENT_KEY = 'storyWeaver_playerAlignment'; 
 
 const SAVED_ADVENTURES_KEY = 'storyWeaver_savedAdventures';
+const SAVED_CHARACTERS_KEY = 'storyWeaver_savedCharacters'; // New Key
+
+// Character Profile Definition
+export interface CharacterProfile {
+  id: string;
+  name: string;
+  archetype: string;
+  background: string;
+  goals: string;
+}
 
 // Effect Definitions
 export type EffectType = "ADD_ITEM" | "REMOVE_ITEM" | "ADD_STATUS" | "REMOVE_STATUS";
@@ -115,6 +125,13 @@ interface GameContextType {
   deleteAdventureFromLibrary: (adventureId: string) => void;
   isAdventureInLibrary: (adventureId?: string) => boolean;
 
+  // Character Library
+  savedCharacters: CharacterProfile[];
+  saveCharacterProfile: (characterData: Omit<CharacterProfile, 'id'> & { id?: string }) => CharacterProfile;
+  deleteCharacterProfile: (characterId: string) => void;
+  getCharacterProfileById: (characterId: string) => CharacterProfile | undefined;
+
+
   resetCreationProgress: () => void;
   resetFullGame: () => void;
   restartCurrentAdventure: () => void;
@@ -147,6 +164,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
   const [isLoaded, setIsLoaded] = useState(false);
 
   const [savedAdventures, setSavedAdventuresState] = useState<GameData[]>([]);
+  const [savedCharacters, setSavedCharactersState] = useState<CharacterProfile[]>([]); // New state
 
   useEffect(() => {
     const storedStoryText = localStorage.getItem(STORY_TEXT_KEY);
@@ -180,9 +198,11 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
     const storedPlayerAlignment = localStorage.getItem(PLAYER_ALIGNMENT_KEY); 
     if (storedPlayerAlignment) setPlayerAlignmentState(JSON.parse(storedPlayerAlignment));
 
-
     const storedSavedAdventures = localStorage.getItem(SAVED_ADVENTURES_KEY);
     if (storedSavedAdventures) setSavedAdventuresState(JSON.parse(storedSavedAdventures));
+    
+    const storedSavedCharacters = localStorage.getItem(SAVED_CHARACTERS_KEY); // Load saved characters
+    if (storedSavedCharacters) setSavedCharactersState(JSON.parse(storedSavedCharacters));
 
     setIsLoaded(true);
   }, []);
@@ -194,7 +214,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
           setCurrentSceneIdState(gameData.startSceneId);
           setGameHistoryState([gameData.startSceneId]);
         } else if (currentSceneId) {
-           setGameHistoryState([currentSceneId]); // Initialize if currentSceneId is valid but history is empty
+           setGameHistoryState([currentSceneId]); 
         }
       }
     }
@@ -219,6 +239,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => { if (isLoaded) localStorage.setItem(PLAYER_ALIGNMENT_KEY, JSON.stringify(playerAlignment)); }, [playerAlignment, isLoaded]); 
 
   useEffect(() => { if (isLoaded) localStorage.setItem(SAVED_ADVENTURES_KEY, JSON.stringify(savedAdventures)); }, [savedAdventures, isLoaded]);
+  useEffect(() => { if (isLoaded) localStorage.setItem(SAVED_CHARACTERS_KEY, JSON.stringify(savedCharacters)); }, [savedCharacters, isLoaded]); // Save characters
 
   const setStoryText = useCallback((text: string | null) => setStoryTextState(text), []);
   const setCharacterDescription = useCallback((desc: string | null) => setCharacterDescriptionState(desc), []);
@@ -291,8 +312,8 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
       setPlayerAlignmentState(prev => {
         const newAlignment = prev + shift;
         setTimeout(() => {
-          toast({ title: "Alignment Shift", description: `Your alignment shifted by ${shift}. New alignment: ${newAlignment}` });
-        }, 0);
+         toast({ title: "Alignment Shift", description: `Your alignment shifted by ${shift}. New alignment: ${newAlignment}` });
+        },0);
         return newAlignment;
       });
     }
@@ -301,7 +322,9 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
 
   const resetCreationProgress = useCallback(() => {
     setStoryTextState(null);
-    setCharacterDescriptionState(null);
+    // Keep characterDescription if a character is loaded from library, or clear if defining new
+    // For now, let's clear it to align with "resetting creation"
+    setCharacterDescriptionState(null); 
     setAnalysisResultState(null);
     setNarrativeOutlineState(null);
     setDesiredToneState("Default");
@@ -383,18 +406,22 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
   const loadAdventureFromLibrary = useCallback((adventureId: string): boolean => {
     const adventureToLoad = savedAdventures.find(adv => adv.id === adventureId);
     if (adventureToLoad) {
-      resetCreationProgress(); 
+      // Don't call resetCreationProgress here, as we want to keep the story/character context for the loaded adventure
       setGameDataInternal(adventureToLoad);
+      // If adventureToLoad contains story/character details, set them. For now, they are part of GameData.
+      // This might need refinement if story/character become fully separate entities for saved games.
+      if(adventureToLoad.title) setStoryTextState(`Adventure: ${adventureToLoad.title}`); // Placeholder
+      // setCharacterDescriptionState(...); // Needs character data linked to adventure
       setCreationStepState('generate'); 
       return true;
     }
     return false;
-  }, [savedAdventures, setGameDataInternal, resetCreationProgress]);
+  }, [savedAdventures, setGameDataInternal, setStoryTextState, setCreationStepState]);
 
   const deleteAdventureFromLibrary = useCallback((adventureId: string) => {
     setSavedAdventuresState(prevAdventures => prevAdventures.filter(adv => adv.id !== adventureId));
     if (gameData && gameData.id === adventureId) {
-        resetFullGame();
+        resetFullGame(); // If deleting the active game, reset everything
     }
   }, [gameData, resetFullGame]);
 
@@ -413,9 +440,36 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
       setErrorState(null);
     } else {
       console.warn("Cannot restart adventure: gameData, startSceneId, or start scene is missing/invalid.");
-      resetFullGame(); // resetFullGame is stable due to its dependency on stable resetCreationProgress
+      resetFullGame(); 
     }
-  }, [gameData, resetFullGame]); // resetFullGame is stable
+  }, [gameData, resetFullGame]);
+
+  // Character Profile Management Functions
+  const saveCharacterProfile = useCallback((characterData: Omit<CharacterProfile, 'id'> & { id?: string }): CharacterProfile => {
+    const charId = characterData.id || crypto.randomUUID();
+    const profileToSave: CharacterProfile = { ...characterData, id: charId };
+
+    setSavedCharactersState(prev => {
+      const existingIndex = prev.findIndex(p => p.id === charId);
+      if (existingIndex > -1) {
+        const updated = [...prev];
+        updated[existingIndex] = profileToSave;
+        return updated;
+      }
+      return [...prev, profileToSave];
+    });
+    return profileToSave;
+  }, []);
+
+  const deleteCharacterProfile = useCallback((characterId: string) => {
+    setSavedCharactersState(prev => prev.filter(p => p.id !== characterId));
+    // Optionally, if this character was "active", clear the active character concept
+  }, []);
+
+  const getCharacterProfileById = useCallback((characterId: string): CharacterProfile | undefined => {
+    return savedCharacters.find(p => p.id === characterId);
+  }, [savedCharacters]);
+
 
   if (!isLoaded) {
     return null;
@@ -450,6 +504,11 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
       loadAdventureFromLibrary,
       deleteAdventureFromLibrary,
       isAdventureInLibrary,
+
+      savedCharacters,
+      saveCharacterProfile,
+      deleteCharacterProfile,
+      getCharacterProfileById,
 
       resetCreationProgress,
       resetFullGame,
