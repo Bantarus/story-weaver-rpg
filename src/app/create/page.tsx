@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { useGame, type GameData, type SceneNode, type DesiredTone, type DesiredLength, type CharacterProfile } from "@/context/GameContext";
+import { useGame, type GameData, type SceneNode, type DesiredTone, type DesiredLength, type CharacterProfile, type AnalyzeSourceMaterialOutput } from "@/context/GameContext";
 import { useSettings } from "@/context/SettingsContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,6 +15,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, BookText, UserPlus, Wand2, AlertCircle, CheckCircle, Play, Palette, Scale, Sparkles, RefreshCcw, Save, LibraryBig, UserCheck, Download, FileUp } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { z } from "zod";
 
 import { analyzeSourceMaterial } from "@/ai/flows/analyze-source-material";
 import { generateNarrativeOutline } from "@/ai/flows/generate-narrative-outline";
@@ -25,6 +26,55 @@ const USE_MOCK_GENERATION = true;
 
 const toneOptions: DesiredTone[] = ["Default", "Heroic", "Mysterious", "Comedic", "Tragic", "Dramatic"];
 const lengthOptions: DesiredLength[] = ["Default", "Short", "Medium", "Long"];
+
+
+// Zod Schemas for Import Validation
+const ImportEffectSchema = z.object({
+  type: z.enum(["ADD_ITEM", "REMOVE_ITEM", "ADD_STATUS", "REMOVE_STATUS"]),
+  value: z.string(),
+  description: z.string().optional(),
+});
+
+const ImportSceneChoiceSchema = z.object({
+  text: z.string(),
+  nextNodeId: z.string(),
+  effects: z.array(ImportEffectSchema).optional(),
+  alignmentEffect: z.number().optional().default(0),
+});
+
+const ImportSceneNodeSchema = z.object({
+  id: z.string(),
+  title: z.string().optional(),
+  text: z.string(),
+  choices: z.array(ImportSceneChoiceSchema),
+  effects: z.array(ImportEffectSchema).optional(),
+  visualHint: z.string().optional(),
+  soundEffect: z.string().optional(),
+  isEnding: z.boolean().optional(),
+  endingType: z.string().optional(),
+});
+
+const AnalyzeSourceMaterialOutputSchemaForImport = z.object({
+  plotPoints: z.string(),
+  characters: z.string(),
+  settings: z.string(),
+  themes: z.string(),
+  tone: z.string(),
+}).nullable().optional();
+
+
+const ImportGameDataSchema = z.object({
+  id: z.string().optional(),
+  adventureName: z.string().optional(),
+  title: z.string().optional(),
+  startSceneId: z.string(),
+  scenes: z.record(ImportSceneNodeSchema), // Expects scenes as a record
+  storyText: z.string().optional(),
+  characterDescription: z.string().optional(),
+  analysisResult: AnalyzeSourceMaterialOutputSchemaForImport,
+  narrativeOutline: z.string().optional(),
+});
+
 
 export default function CreatePage() {
   const router = useRouter();
@@ -185,8 +235,43 @@ export default function CreatePage() {
       let finalGameDataToSet: GameData | null = null;
 
       if (USE_MOCK_GENERATION) {
-        finalGameDataToSet = mockGameData as GameData;
+        // Simulate the structure the AI flow would return (scenes as array) before conversion
+        const mockAIScenesArray = Object.values(mockGameData.scenes);
+        const mockAIOutput: FormatGameDataJsonOutput = {
+            title: mockGameData.title,
+            startSceneId: mockGameData.startSceneId,
+            scenes: mockAIScenesArray as AISceneNode[] // Cast for mock, AI would return this structure
+        };
+        
+        const scenesRecord: Record<string, SceneNode> = {};
+        mockAIOutput.scenes.forEach((aiScene: AISceneNode) => {
+          scenesRecord[aiScene.id] = {
+            ...aiScene, // Spread existing AISceneNode fields
+            title: aiScene.title && aiScene.title.trim() !== "" ? aiScene.title.trim() : undefined,
+            choices: aiScene.choices.map(choice => ({
+                ...choice, // Spread existing choice fields
+                effects: choice.effects && choice.effects.length > 0 ? choice.effects : undefined,
+                alignmentEffect: typeof choice.alignmentEffect === 'number' ? choice.alignmentEffect : 0,
+            })),
+            effects: aiScene.effects && aiScene.effects.length > 0 ? aiScene.effects : undefined,
+            endingType: aiScene.endingType && aiScene.endingType.trim() !== "" && aiScene.endingType.trim().toLowerCase() !== "none" ? aiScene.endingType.trim() : undefined,
+            visualHint: aiScene.visualHint && aiScene.visualHint.trim() !== "" ? aiScene.visualHint.trim() : undefined,
+            soundEffect: aiScene.soundEffect && aiScene.soundEffect.trim() !== "" ? aiScene.soundEffect.trim() : undefined,
+          };
+        });
+        
+        finalGameDataToSet = {
+          title: mockAIOutput.title,
+          startSceneId: mockAIOutput.startSceneId,
+          scenes: scenesRecord,
+          // Optionally include mock story context if you want to test that persistence
+          storyText: storyText || "Mock story text for this adventure.",
+          characterDescription: characterDescription || "Mock character for this adventure.",
+          analysisResult: analysisResult || null,
+          narrativeOutline: narrativeOutline || "Mock narrative outline for this adventure."
+        };
         toast({ title: "Mock RPG Weaved!", description: "Your mock adventure is ready to play or save.", className: "bg-primary text-primary-foreground" });
+
       } else {
         if (!narrativeOutline) {
           setError("Narrative outline not found. Please go back to the character step.");
@@ -242,6 +327,11 @@ export default function CreatePage() {
           title: aiFormattedOutput.title && aiFormattedOutput.title.trim() !== "" ? aiFormattedOutput.title.trim() : undefined,
           startSceneId: finalStartSceneId,
           scenes: scenesRecord,
+          // Persist current creation context with the game data
+          storyText: storyText || undefined,
+          characterDescription: characterDescription || undefined,
+          analysisResult: analysisResult || undefined,
+          narrativeOutline: narrativeOutline || undefined,
         };
         toast({ title: "RPG Weaved!", description: "Your adventure is ready to play or save.", className: "bg-primary text-primary-foreground" });
       }
@@ -270,7 +360,6 @@ export default function CreatePage() {
       toast({ variant: "destructive", title: "Cannot Save", description: "No game data available to save." });
       return;
     }
-
     console.log("handleSaveAdventureClick called. setTimeout pending.");
     setTimeout(() => {
         console.log("setTimeout callback executed.");
@@ -290,13 +379,14 @@ export default function CreatePage() {
             console.log("Prompt cancelled by user.");
             toast({ title: "Save Cancelled", description: "Adventure was not saved." });
         } else if (adventureName.trim() === "") {
-            console.log("Prompt returned empty string.");
+            console.log("Prompt returned empty string: User entered no name.");
             toast({ variant: "destructive", title: "Save Error", description: "Adventure name cannot be empty. Please provide a valid name." });
         } else {
             console.log("Attempting to save with name:", adventureName.trim());
             if (saveAdventureToLibrary(adventureName.trim())) {
                 toast({ title: "Adventure Saved!", description: `"${adventureName.trim()}" has been saved to your library.`, className: "bg-primary text-primary-foreground" });
             } else {
+                // This case might not be hit if saveAdventureToLibrary always returns true or errors out
                 toast({ variant: "destructive", title: "Save Failed", description: "Could not save the adventure." });
             }
         }
@@ -321,7 +411,6 @@ export default function CreatePage() {
     }
     try {
       const fileNameBase = gameData.adventureName || gameData.title || "story-weaver-adventure";
-      // Sanitize filename: replace non-alphanumeric (except ._ -) with underscore
       const safeFileNameBase = fileNameBase.replace(/[^a-z0-9_.-]/gi, '_').toLowerCase();
       const fileName = `${safeFileNameBase}_gamedata.json`;
 
@@ -360,29 +449,46 @@ export default function CreatePage() {
     reader.onload = async (e) => {
       try {
         const content = e.target?.result as string;
-        const parsedData = JSON.parse(content);
+        const parsedJson = JSON.parse(content);
+        
+        const validationResult = ImportGameDataSchema.safeParse(parsedJson);
 
-        // Basic validation (can be expanded with Zod later if needed)
-        if (typeof parsedData.startSceneId === 'string' && typeof parsedData.scenes === 'object' && parsedData.scenes !== null) {
-          setGameData(parsedData as GameData);
-          setStoryText("Imported Adventure: " + (parsedData.title || "Untitled Adventure"));
-          setCharacterDescription("Character for imported adventure."); // Or derive from imported data if available
-          setNarrativeOutline("Narrative from imported adventure."); // Or derive
-          setAnalysisResult(null); // Reset analysis as it's from imported data
+        if (validationResult.success) {
+          const validatedGameData = validationResult.data;
+          // Cast to GameData type from context, as Zod's inferred type might be slightly different
+          // if we didn't perfectly align all optional/null properties.
+          // However, if ImportGameDataSchema is built to match GameData, this cast is mostly for TypeScript.
+          setGameData(validatedGameData as unknown as GameData); 
+          
+          // Optionally, update other context fields if they exist in the imported data
+          if (validatedGameData.storyText) setStoryText(validatedGameData.storyText);
+          else setStoryText("Imported Adventure: " + (validatedGameData.title || "Untitled Adventure"));
+          
+          if (validatedGameData.characterDescription) setCharacterDescription(validatedGameData.characterDescription);
+          else setCharacterDescription("Character for imported adventure.");
+          
+          if (validatedGameData.narrativeOutline) setNarrativeOutline(validatedGameData.narrativeOutline);
+          else setNarrativeOutline("Narrative from imported adventure.");
+          
+          if (validatedGameData.analysisResult) setAnalysisResult(validatedGameData.analysisResult as AnalyzeSourceMaterialOutput);
+          else setAnalysisResult(null);
+          
           setCreationStep('generate');
           toast({ title: "Adventure Imported!", description: "The game data has been loaded.", className: "bg-primary text-primary-foreground" });
+
         } else {
-          throw new Error("Invalid game data structure. Missing 'startSceneId' or 'scenes'.");
+          console.error("Imported JSON validation failed:", validationResult.error.flatten());
+          const errorMessages = validationResult.error.errors.map(err => `Field '${err.path.join('.') || 'root'}': ${err.message}`).join('; ');
+          throw new Error(`Invalid game data file structure. Details: ${errorMessages}`);
         }
       } catch (importError) {
         console.error("Error importing game data:", importError);
         const errorMsg = importError instanceof Error ? importError.message : "Failed to parse or validate the adventure file.";
         setError(errorMsg);
-        setCreationStep('error'); // Go to error step to display message
-        toast({ variant: "destructive", title: "Import Failed", description: errorMsg });
+        setCreationStep('error'); 
+        toast({ variant: "destructive", title: "Import Failed", description: errorMsg, duration: 7000 });
       } finally {
         setIsLoading(false);
-        // Reset file input value to allow importing the same file again
         if (event.target) {
           event.target.value = '';
         }
@@ -405,11 +511,14 @@ export default function CreatePage() {
 
   const handleTryAgainOnError = () => {
     setError(null);
-    if (narrativeOutline) {
+    // Attempt to go back to the most relevant previous step based on available data
+    if (gameData && narrativeOutline) { // If gameData was being generated but failed, retry generation
         setCreationStep('generate');
-    } else if (analysisResult) {
+    } else if (narrativeOutline) { // If outline exists, error was likely in final game generation
+        setCreationStep('generate');
+    } else if (analysisResult) { // If analysis exists, error was likely in character/outline step
         setCreationStep('character');
-    } else {
+    } else { // Default to story input if very early error
         setCreationStep('story');
     }
   };
@@ -427,7 +536,7 @@ export default function CreatePage() {
       setCharGoalsLocal(charProfile.goals);
       setLoadedCharId(charProfile.id);
       const fullDesc = `Name: ${charProfile.name}\nArchetype: ${charProfile.archetype}\nBackground: ${charProfile.background}\nGoals: ${charProfile.goals}`;
-      setCharacterDescription(fullDesc); // Update context
+      setCharacterDescription(fullDesc); 
       toast({ title: "Character Loaded", description: `"${charProfile.name}" has been loaded into the form.`, className: "bg-primary text-primary-foreground" });
     } else {
       toast({ variant: "destructive", title: "Load Failed", description: "Could not find the selected character." });
@@ -440,14 +549,14 @@ export default function CreatePage() {
       return;
     }
     const characterDataToSave: Omit<CharacterProfile, 'id'> & { id?: string } = {
-      id: loadedCharId || undefined, // Pass ID if updating an existing loaded char
+      id: loadedCharId || undefined, 
       name: charName.trim(),
       archetype: charArchetype.trim(),
       background: charBackground.trim(),
       goals: charGoals.trim(),
     };
     const savedProfile = saveCharacterProfile(characterDataToSave);
-    setLoadedCharId(savedProfile.id); // Ensure loadedCharId is set to the (potentially new) ID
+    setLoadedCharId(savedProfile.id); 
     toast({ title: "Character Saved!", description: `"${savedProfile.name}" has been saved to your library.`, className: "bg-primary text-primary-foreground" });
   };
 
@@ -462,24 +571,25 @@ export default function CreatePage() {
         loadedProfile.goals === charGoals.trim()) {
       saveCharButtonText = "Character is Saved/Up-to-date";
       isCurrentCharSaved = true;
-    } else {
+    } else if (loadedProfile) { // Loaded and modified
       saveCharButtonText = "Update Character in Library";
+    } else { // loadedCharId is set but profile not found (should not happen)
+       saveCharButtonText = "Save Current Character to Library"; // Default back
     }
-  } else if (charName.trim() && charArchetype.trim() && charBackground.trim() && charGoals.trim()) {
-     const existingChar = savedCharacters.find(c =>
+  } else if (charName.trim() || charArchetype.trim() || charBackground.trim() || charGoals.trim()) { // New character being typed
+     // Check if the *current form content* matches an existing character in the library
+     const existingCharInLib = savedCharacters.find(c =>
         c.name === charName.trim() &&
         c.archetype === charArchetype.trim() &&
         c.background === charBackground.trim() &&
         c.goals === charGoals.trim()
       );
-      if (existingChar) {
-        // Scenario: Form matches an existing character in library, but it wasn't explicitly loaded.
-        // To avoid accidental overwrite or creating a duplicate name, we could prompt or disable direct save.
-        // For now, let's assume if it matches an existing one and not loaded, save will create a new one (if IDs differ)
-        // or update if the user intends to save under the same "implicit" profile by name.
-        // The current `saveCharacterProfile` logic handles new vs update based on passed ID.
-        // Here, we can set loadedCharId if it's a perfect match, to enable "Update" behavior for the button.
-         // setLoadedCharId(existingChar.id); // This could be too implicit.
+      if (existingCharInLib) {
+        saveCharButtonText = "Character is Saved/Up-to-date"; // Implies it matches one in lib
+        isCurrentCharSaved = true;
+        // setLoadedCharId(existingCharInLib.id); // Optionally set this to make save an "update"
+      } else {
+        saveCharButtonText = "Save Current Character to Library";
       }
   }
 
@@ -516,7 +626,7 @@ export default function CreatePage() {
           <AlertDescription>{error}</AlertDescription>
           <div className="mt-4 flex gap-2">
             <Button onClick={handleTryAgainOnError} variant="outline" className="w-full sm:w-auto">
-                <RefreshCcw className="mr-2 h-4 w-4" /> Try Again from Previous Step
+                <RefreshCcw className="mr-2 h-4 w-4" /> Try Again
             </Button>
             <Button onClick={() => { setGameData(null); resetCreationProgress(); setCreationStep('story');}} variant="destructive" className="w-full sm:w-auto">
                 Start Over
@@ -614,7 +724,7 @@ export default function CreatePage() {
                     type="button"
                     variant={isCurrentCharSaved ? "secondary" : "outline"}
                     onClick={handleSaveCurrentCharacterToLibrary}
-                    disabled={isLoading || !charName.trim() || !charArchetype.trim() || !charBackground.trim() || !charGoals.trim() || isCurrentCharSaved}
+                    disabled={isLoading || !(charName.trim() || charArchetype.trim() || charBackground.trim() || charGoals.trim()) || isCurrentCharSaved}
                     className="w-full"
                   >
                     <Save className="mr-2 h-4 w-4" />
@@ -777,3 +887,5 @@ export default function CreatePage() {
     </div>
   );
 }
+
+    
