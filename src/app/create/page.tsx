@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { useGame, type GameData, type SceneNode, type DesiredTone, type DesiredLength, type Effect } from "@/context/GameContext";
+import { useGame, type GameData, type SceneNode, type DesiredTone, type DesiredLength, type CharacterProfile } from "@/context/GameContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, BookText, UserPlus, Wand2, AlertCircle, CheckCircle, Play, Palette, Scale, Sparkles, RefreshCcw, Save, LibraryBig } from "lucide-react";
+import { Loader2, BookText, UserPlus, Wand2, AlertCircle, CheckCircle, Play, Palette, Scale, Sparkles, RefreshCcw, Save, LibraryBig, UserCheck, UserX } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 import { analyzeSourceMaterial } from "@/ai/flows/analyze-source-material";
@@ -20,7 +20,7 @@ import { generateNarrativeOutline } from "@/ai/flows/generate-narrative-outline"
 import { formatGameDataJson, type FormatGameDataJsonOutput, type AISceneNode } from "@/ai/flows/format-game-data-json";
 import { mockGameData } from "@/lib/mock-game-data";
 
-const USE_MOCK_GENERATION = false;
+const USE_MOCK_GENERATION = true;
 
 const toneOptions: DesiredTone[] = ["Default", "Heroic", "Mysterious", "Comedic", "Tragic", "Dramatic"];
 const lengthOptions: DesiredLength[] = ["Default", "Short", "Medium", "Long"];
@@ -43,46 +43,41 @@ export default function CreatePage() {
     creationStep, setCreationStep,
     resetCreationProgress,
     saveAdventureToLibrary,
-    isAdventureInLibrary
+    isAdventureInLibrary,
+    savedCharacters,
+    saveCharacterProfile,
+    deleteCharacterProfile,
+    getCharacterProfileById
   } = useGame();
 
-  const [charName, setCharNameLocal] = useState(() => {
-    const cd = characterDescription;
-    if (!cd) return "";
-    const match = cd.match(/Name: (.*?)(?:\nArchetype:|\nBackground:|\nGoals:|$)/s);
-    return match ? match[1].trim() : "";
-  });
-  const [charArchetype, setCharArchetypeLocal] = useState(() => {
-    const cd = characterDescription;
-    if (!cd) return "";
-    const match = cd.match(/Archetype: (.*?)(?:\nBackground:|\nGoals:|$)/s);
-    return match ? match[1].trim() : "";
-  });
-  const [charBackground, setCharBackgroundLocal] = useState(() => {
-    const cd = characterDescription;
-    if (!cd) return "";
-    const match = cd.match(/Background: (.*?)(?:\nGoals:|$)/s);
-    return match ? match[1].trim() : "";
-  });
-  const [charGoals, setCharGoalsLocal] = useState(() => {
-    const cd = characterDescription;
-    if (!cd) return "";
-    const match = cd.match(/Goals: (.*)/s);
-    return match ? match[1].trim() : "";
-  });
+  const [charName, setCharNameLocal] = useState("");
+  const [charArchetype, setCharArchetypeLocal] = useState("");
+  const [charBackground, setCharBackgroundLocal] = useState("");
+  const [charGoals, setCharGoalsLocal] = useState("");
+  const [loadedCharId, setLoadedCharId] = useState<string | null>(null); // To track if current form data is from a loaded character
+
+  const [selectedLibraryCharId, setSelectedLibraryCharId] = useState<string | undefined>(undefined);
+
 
   useEffect(() => {
-    if (characterDescription) {
+    if (characterDescription && creationStep === 'character') { // Only parse if actively on character step
       const nameMatch = characterDescription.match(/Name: (.*?)(?:\nArchetype:|\nBackground:|\nGoals:|$)/s);
-      if (nameMatch) setCharNameLocal(nameMatch[1].trim());
+      if (nameMatch) setCharNameLocal(nameMatch[1].trim()); else setCharNameLocal("");
       const archetypeMatch = characterDescription.match(/Archetype: (.*?)(?:\nBackground:|\nGoals:|$)/s);
-      if (archetypeMatch) setCharArchetypeLocal(archetypeMatch[1].trim());
+      if (archetypeMatch) setCharArchetypeLocal(archetypeMatch[1].trim()); else setCharArchetypeLocal("");
       const backgroundMatch = characterDescription.match(/Background: (.*?)(?:\nGoals:|$)/s);
-      if (backgroundMatch) setCharBackgroundLocal(backgroundMatch[1].trim());
+      if (backgroundMatch) setCharBackgroundLocal(backgroundMatch[1].trim()); else setCharBackgroundLocal("");
       const goalsMatch = characterDescription.match(/Goals: (.*)/s);
-      if (goalsMatch) setCharGoalsLocal(goalsMatch[1].trim());
+      if (goalsMatch) setCharGoalsLocal(goalsMatch[1].trim()); else setCharGoalsLocal("");
+    } else if (creationStep === 'character') {
+      // If no characterDescription but on character step, ensure fields are clear or default
+      setCharNameLocal("");
+      setCharArchetypeLocal("");
+      setCharBackgroundLocal("");
+      setCharGoalsLocal("");
+      setLoadedCharId(null);
     }
-  }, [characterDescription]);
+  }, [characterDescription, creationStep]);
 
 
   const progressValue = {
@@ -136,7 +131,7 @@ export default function CreatePage() {
       setCreationStep('error');
       return;
     }
-    const fullCharacterDescription = `Name: ${charName}\nArchetype: ${charArchetype}\nBackground: ${charBackground}\nGoals: ${charGoals}`;
+    const fullCharacterDescription = `Name: ${charName.trim()}\nArchetype: ${charArchetype.trim()}\nBackground: ${charBackground.trim()}\nGoals: ${charGoals.trim()}`;
     setCharacterDescription(fullCharacterDescription);
 
     if (USE_MOCK_GENERATION) {
@@ -182,7 +177,7 @@ export default function CreatePage() {
       let finalGameDataToSet: GameData | null = null;
 
       if (USE_MOCK_GENERATION) {
-        finalGameDataToSet = mockGameData as GameData; 
+        finalGameDataToSet = mockGameData as GameData;
         toast({ title: "Mock RPG Weaved!", description: "Your mock adventure is ready to play or save.", className: "bg-primary text-primary-foreground" });
       } else {
         if (!narrativeOutline) {
@@ -259,47 +254,32 @@ export default function CreatePage() {
   };
 
   const handleSaveAdventureClick = useCallback(() => {
-    console.log("handleSaveAdventureClick: Function called.");
     if (!gameData) {
       toast({ variant: "destructive", title: "Cannot Save", description: "No game data available to save." });
-      console.error("handleSaveAdventureClick: Aborted - No gameData.");
       return;
     }
-    console.log("handleSaveAdventureClick: gameData is present. Current gameData.title:", gameData.title, "gameData.adventureName:", gameData.adventureName);
 
     setTimeout(() => {
-      console.log("handleSaveAdventureClick: setTimeout callback executed.");
       const defaultName = gameData.adventureName || gameData.title || "My Awesome Adventure";
-      console.log("handleSaveAdventureClick: Default name for prompt will be:", defaultName);
-
       let adventureName: string | null = null;
       try {
         adventureName = window.prompt("Enter a name for your adventure:", defaultName);
-        console.log("handleSaveAdventureClick: window.prompt call completed. Returned value:", adventureName);
       } catch (promptError) {
-        console.error("handleSaveAdventureClick: An error occurred during window.prompt execution:", promptError);
+        console.error("Error during window.prompt for adventure name:", promptError);
         toast({ variant: "destructive", title: "Dialog Error", description: "Could not display the save name dialog." });
         return;
       }
 
-      if (adventureName && adventureName.trim() !== "") {
-        console.log(`handleSaveAdventureClick: Attempting to save with name: "${adventureName.trim()}"`);
+      if (adventureName === null) {
+        toast({ title: "Save Cancelled", description: "Adventure was not saved." });
+      } else if (adventureName.trim() === "") {
+        toast({ variant: "destructive", title: "Save Cancelled", description: "Adventure name cannot be empty." });
+      } else {
         if (saveAdventureToLibrary(adventureName.trim())) {
           toast({ title: "Adventure Saved!", description: `"${adventureName.trim()}" has been saved to your library.`, className: "bg-primary text-primary-foreground" });
-          console.log("handleSaveAdventureClick: Save successful.");
         } else {
-          toast({ variant: "destructive", title: "Save Failed", description: "Could not save the adventure. Game data might be missing (unexpected)." });
-          console.error("handleSaveAdventureClick: saveAdventureToLibrary returned false.");
+          toast({ variant: "destructive", title: "Save Failed", description: "Could not save the adventure." });
         }
-      } else if (adventureName === "") { 
-          toast({ variant: "destructive", title: "Save Cancelled", description: "Adventure name cannot be empty." });
-          console.log("handleSaveAdventureClick: Save cancelled - adventureName was empty string.");
-      } else if (adventureName === null) { 
-        toast({ title: "Save Cancelled", description: "Adventure was not saved." });
-        console.log("handleSaveAdventureClick: Save cancelled - adventureName was null.");
-      } else { 
-        console.warn("handleSaveAdventureClick: Unexpected adventureName value after prompt:", adventureName);
-        toast({ title: "Save Cancelled", description: "An unexpected issue occurred determining the adventure name." });
       }
     }, 0);
   }, [gameData, saveAdventureToLibrary, toast]);
@@ -311,7 +291,7 @@ export default function CreatePage() {
       setCreationStep('error');
       return;
     }
-    resetCreationProgress(); 
+    resetCreationProgress();
     router.push("/play");
   };
 
@@ -324,6 +304,43 @@ export default function CreatePage() {
     } else {
         setCreationStep('story');
     }
+  };
+
+  const handleLoadCharacterFromLibrary = () => {
+    if (!selectedLibraryCharId) {
+      toast({ variant: "destructive", title: "No Character Selected", description: "Please select a character from the library to load." });
+      return;
+    }
+    const charProfile = getCharacterProfileById(selectedLibraryCharId);
+    if (charProfile) {
+      setCharNameLocal(charProfile.name);
+      setCharArchetypeLocal(charProfile.archetype);
+      setCharBackgroundLocal(charProfile.background);
+      setCharGoalsLocal(charProfile.goals);
+      setLoadedCharId(charProfile.id); // Track that this character is loaded
+      const fullDesc = `Name: ${charProfile.name}\nArchetype: ${charProfile.archetype}\nBackground: ${charProfile.background}\nGoals: ${charProfile.goals}`;
+      setCharacterDescription(fullDesc);
+      toast({ title: "Character Loaded", description: `"${charProfile.name}" has been loaded into the form.`, className: "bg-primary text-primary-foreground" });
+    } else {
+      toast({ variant: "destructive", title: "Load Failed", description: "Could not find the selected character." });
+    }
+  };
+
+  const handleSaveCurrentCharacterToLibrary = () => {
+    if (!charName.trim() || !charArchetype.trim() || !charBackground.trim() || !charGoals.trim()) {
+      toast({ variant: "destructive", title: "Cannot Save Character", description: "Please fill in all character details (Name, Archetype, Background, Goals)." });
+      return;
+    }
+    const characterDataToSave: Omit<CharacterProfile, 'id'> & { id?: string } = {
+      id: loadedCharId || undefined, // Pass ID if we are updating a loaded character
+      name: charName.trim(),
+      archetype: charArchetype.trim(),
+      background: charBackground.trim(),
+      goals: charGoals.trim(),
+    };
+    const savedProfile = saveCharacterProfile(characterDataToSave);
+    setLoadedCharId(savedProfile.id); // Ensure loadedCharId is updated if it was a new save
+    toast({ title: "Character Saved!", description: `"${savedProfile.name}" has been saved to your library.`, className: "bg-primary text-primary-foreground" });
   };
 
   const isCurrentAdventureSaved = gameData && gameData.id && isAdventureInLibrary(gameData.id);
@@ -369,7 +386,7 @@ export default function CreatePage() {
               <Textarea
                 placeholder="Paste your story text here (min. 50 characters)..."
                 value={storyText || ""}
-                onChange={(e) => setStoryText(e.target.value)}
+                onChange={(e) => { setStoryText(e.target.value); }}
                 rows={15}
                 className="text-base leading-relaxed"
                 disabled={isLoading}
@@ -392,24 +409,72 @@ export default function CreatePage() {
             <CardDescription>Create your protagonist. Their background, goals, and your preferences below will shape their journey.</CardDescription>
           </CardHeader>
           <form onSubmit={handleCharacterSubmit}>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-6">
+              {/* Character Library Section */}
+              <Card className="pt-4 bg-muted/20 border-dashed">
+                <CardHeader className="pt-0 pb-2">
+                  <CardTitle className="text-xl flex items-center gap-2"><LibraryBig className="text-primary"/> Character Library</CardTitle>
+                  <CardDescription>Load a saved character or save your current creation.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {savedCharacters.length > 0 ? (
+                    <div className="flex items-end gap-2">
+                      <div className="flex-grow">
+                        <Label htmlFor="libraryCharSelect">Load Saved Character</Label>
+                        <Select value={selectedLibraryCharId} onValueChange={setSelectedLibraryCharId}>
+                          <SelectTrigger id="libraryCharSelect">
+                            <SelectValue placeholder="Select a character..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {savedCharacters.map(char => (
+                              <SelectItem key={char.id} value={char.id}>
+                                {char.name} ({char.archetype})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <Button type="button" variant="outline" onClick={handleLoadCharacterFromLibrary} disabled={!selectedLibraryCharId || isLoading}>
+                        <UserCheck className="mr-2 h-4 w-4" /> Load
+                      </Button>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Your character library is empty. Save a character using the button below!</p>
+                  )}
+                   <Button 
+                    type="button" 
+                    variant="outline" 
+                    onClick={handleSaveCurrentCharacterToLibrary} 
+                    disabled={isLoading || !charName.trim() || !charArchetype.trim()}
+                    className="w-full"
+                  >
+                    <Save className="mr-2 h-4 w-4" /> 
+                    {loadedCharId && savedCharacters.some(c => c.id === loadedCharId && c.name === charName && c.archetype === charArchetype && c.background === charBackground && c.goals === charGoals) 
+                      ? "Character is Saved/Updated" 
+                      : loadedCharId ? "Update Character in Library" : "Save Current Character to Library"}
+                  </Button>
+                </CardContent>
+              </Card>
+
+              {/* Character Definition Fields */}
               <div>
                 <Label htmlFor="charName">Character Name</Label>
-                <Input id="charName" value={charName} onChange={(e) => setCharNameLocal(e.target.value)} placeholder="e.g., Elara Meadowlight" disabled={isLoading} />
+                <Input id="charName" value={charName} onChange={(e) => {setCharNameLocal(e.target.value); setLoadedCharId(null);}} placeholder="e.g., Elara Meadowlight" disabled={isLoading} />
               </div>
               <div>
                 <Label htmlFor="charArchetype">Archetype/Class</Label>
-                <Input id="charArchetype" value={charArchetype} onChange={(e) => setCharArchetypeLocal(e.target.value)} placeholder="e.g., Wandering Scholar, Cursed Knight" disabled={isLoading} />
+                <Input id="charArchetype" value={charArchetype} onChange={(e) => {setCharArchetypeLocal(e.target.value); setLoadedCharId(null);}} placeholder="e.g., Wandering Scholar, Cursed Knight" disabled={isLoading} />
               </div>
               <div>
                 <Label htmlFor="charBackground">Background Story</Label>
-                <Textarea id="charBackground" value={charBackground} onChange={(e) => setCharBackgroundLocal(e.target.value)} placeholder="A brief history of your character..." rows={3} disabled={isLoading} />
+                <Textarea id="charBackground" value={charBackground} onChange={(e) => {setCharBackgroundLocal(e.target.value); setLoadedCharId(null);}} placeholder="A brief history of your character..." rows={3} disabled={isLoading} />
               </div>
               <div>
                 <Label htmlFor="charGoals">Personal Goals</Label>
-                <Textarea id="charGoals" value={charGoals} onChange={(e) => setCharGoalsLocal(e.target.value)} placeholder="What does your character hope to achieve?" rows={3} disabled={isLoading} />
+                <Textarea id="charGoals" value={charGoals} onChange={(e) => {setCharGoalsLocal(e.target.value); setLoadedCharId(null);}} placeholder="What does your character hope to achieve?" rows={3} disabled={isLoading} />
               </div>
 
+              {/* Advanced Generation Section */}
               <Card className="pt-4 bg-muted/30 border-dashed">
                 <CardHeader className="pt-0 pb-2">
                   <CardTitle className="text-xl flex items-center gap-2"><Sparkles className="text-primary"/> Advanced Generation (Optional)</CardTitle>
@@ -457,9 +522,9 @@ export default function CreatePage() {
               </Card>
 
             </CardContent>
-            <CardFooter className="flex justify-between">
+            <CardFooter className="flex flex-col sm:flex-row justify-between gap-2">
               <Button variant="outline" onClick={() => setCreationStep("story")} disabled={isLoading}>Back to Story</Button>
-              <Button type="submit" disabled={isLoading || !charName || !charArchetype || !charBackground || !charGoals } className="w-1/2">
+              <Button type="submit" disabled={isLoading || !charName.trim() || !charArchetype.trim() || !charBackground.trim() || !charGoals.trim() } className="w-full sm:w-auto">
                 {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
                 {USE_MOCK_GENERATION ? "Craft Character & Get Mock Outline" : "Craft Character & Get Outline"}
               </Button>
@@ -539,3 +604,5 @@ export default function CreatePage() {
     </div>
   );
 }
+
+ 
