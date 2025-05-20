@@ -4,8 +4,9 @@ import { Geist, Geist_Mono } from 'next/font/google';
 import { Lora } from 'next/font/google';
 import './globals.css';
 import { GameProvider } from '@/context/GameContext';
-import { SettingsProvider } from '@/context/SettingsContext'; // Added
+import { SettingsProvider } from '@/context/SettingsContext';
 import { Header } from '@/components/Header';
+import { Footer } from '@/components/Footer'; // Added Footer import
 import { Toaster } from "@/components/ui/toaster"
 
 const geistSans = Geist({
@@ -37,15 +38,16 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} ${lora.variable} antialiased flex flex-col min-h-screen`}>
-        <SettingsProvider> {/* Added SettingsProvider */}
+        <SettingsProvider>
           <GameProvider>
             <Header />
             <main className="flex-grow container mx-auto px-4 py-8">
               {children}
             </main>
             <Toaster />
+            <Footer /> {/* Added Footer component */}
           </GameProvider>
-        </SettingsProvider> {/* Added SettingsProvider */}
+        </SettingsProvider>
       </body>
     </html>
   );
