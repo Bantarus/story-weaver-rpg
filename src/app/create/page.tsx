@@ -20,7 +20,7 @@ import { generateNarrativeOutline } from "@/ai/flows/generate-narrative-outline"
 import { formatGameDataJson, type FormatGameDataJsonOutput, type AISceneNode } from "@/ai/flows/format-game-data-json";
 import { mockGameData } from "@/lib/mock-game-data";
 
-const USE_MOCK_GENERATION = true;
+const USE_MOCK_GENERATION = false;
 
 const toneOptions: DesiredTone[] = ["Default", "Heroic", "Mysterious", "Comedic", "Tragic", "Dramatic"];
 const lengthOptions: DesiredLength[] = ["Default", "Short", "Medium", "Long"];

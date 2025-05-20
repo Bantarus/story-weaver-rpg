@@ -1,22 +1,28 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useGame, type SceneNode, type SceneChoice } from "@/context/GameContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Loader2, AlertCircle, ArrowLeft, Compass, Eye, Ear, RefreshCw, Briefcase, ShieldAlert, Scale as ScaleIcon, Sparkles } from "lucide-react"; // Renamed Scale to ScaleIcon
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Loader2, AlertCircle, ArrowLeft, Compass, Eye, Ear, RefreshCw, Briefcase, ShieldAlert, Scale as ScaleIcon, Sparkles, FileText, Download } from "lucide-react"; 
 import { GameHistoryDisplay } from "@/components/GameHistoryDisplay"; 
 import { Badge } from "@/components/ui/badge";
+import { generatePlaythroughStory, type GeneratePlaythroughStoryInput } from "@/ai/flows/generate-playthrough-story";
+import { useToast } from "@/hooks/use-toast";
 
 export default function PlayPage() {
   const router = useRouter();
+  const { toast } = useToast();
   const { 
     gameData, 
     currentSceneId, setCurrentSceneId,
     gameHistory, 
+    characterDescription, // Assuming this is available from context, might need to add if not
     playerInventory,
     playerStatusEffects,
     playerAlignment, 
@@ -30,6 +36,10 @@ export default function PlayPage() {
   
   const [currentScene, setCurrentScene] = useState<SceneNode | null>(null);
   const [showText, setShowText] = useState(false); 
+  const [isGeneratingStory, setIsGeneratingStory] = useState(false);
+  const [generatedStory, setGeneratedStory] = useState<string | null>(null);
+  const [storyGenerationError, setStoryGenerationError] = useState<string | null>(null);
+  const [showStoryDialog, setShowStoryDialog] = useState(false);
 
   useEffect(() => {
     if (!contextIsLoading && !gameData) {
@@ -86,6 +96,73 @@ export default function PlayPage() {
     resetFullGame();
     router.push("/create");
   };
+
+  const downloadStory = (storyText: string, filename: string = "my-rpg-adventure.txt") => {
+    const element = document.createElement("a");
+    const file = new Blob([storyText], {type: 'text/plain'});
+    element.href = URL.createObjectURL(file);
+    element.download = filename;
+    document.body.appendChild(element); // Required for this to work in FireFox
+    element.click();
+    document.body.removeChild(element);
+    URL.revokeObjectURL(element.href);
+  };
+
+  const handleGeneratePlaythroughStory = async () => {
+    if (!gameData || !gameHistory || gameHistory.length === 0) {
+      setStoryGenerationError("Cannot generate story: Missing game data or history.");
+      toast({ variant: "destructive", title: "Story Generation Failed", description: "Missing game data or history." });
+      return;
+    }
+
+    setIsGeneratingStory(true);
+    setGeneratedStory(null);
+    setStoryGenerationError(null);
+
+    try {
+      const storyInput: GeneratePlaythroughStoryInput = {
+        gameTitle: gameData.title,
+        scenes: gameData.scenes, // This needs to conform to SceneNodeSchemaForStory if different
+        gameHistory: gameHistory,
+        characterDescription: characterDescription || undefined, // Get from context
+        playerAlignment: playerAlignment,
+        playerInventory: playerInventory.length > 0 ? playerInventory : undefined,
+        playerStatusEffects: playerStatusEffects.length > 0 ? playerStatusEffects : undefined,
+      };
+      
+      // The 'scenes' in gameData might not perfectly match SceneNodeSchemaForStory
+      // if the latter is simplified. We might need to transform gameData.scenes.
+      // For now, assuming direct compatibility or that the Zod schema on the flow is tolerant.
+      // A safer approach would be to map gameData.scenes to fit SceneNodeSchemaForStory.
+      const simplifiedScenes: Record<string, any> = {};
+      for (const sceneId in gameData.scenes) {
+        const scene = gameData.scenes[sceneId];
+        simplifiedScenes[sceneId] = {
+            id: scene.id,
+            title: scene.title,
+            text: scene.text,
+            choices: scene.choices.map(c => ({ text: c.text, nextNodeId: c.nextNodeId })), // simplify choices
+            isEnding: scene.isEnding,
+            endingType: scene.endingType,
+        };
+      }
+      storyInput.scenes = simplifiedScenes;
+
+
+      const result = await generatePlaythroughStory(storyInput);
+      setGeneratedStory(result.playthroughStory);
+      setShowStoryDialog(true);
+      toast({ title: "Story Generated!", description: "Your adventure narrative is ready.", className: "bg-primary text-primary-foreground" });
+    } catch (err) {
+      console.error("Error generating playthrough story:", err);
+      const errorMessage = err instanceof Error ? err.message : "An unknown error occurred during story generation.";
+      setStoryGenerationError(errorMessage);
+      toast({ variant: "destructive", title: "Story Generation Failed", description: errorMessage });
+    } finally {
+      setIsGeneratingStory(false);
+    }
+  };
+
 
   if (contextIsLoading || !gameData && !contextError) { 
     return (
@@ -294,24 +371,70 @@ export default function PlayPage() {
                 currentSceneId={currentSceneId}
               />
             )}
+             {storyGenerationError && (
+                <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertTitle>Story Generation Error</AlertTitle>
+                    <AlertDescription>{storyGenerationError}</AlertDescription>
+                </Alert>
+            )}
             <div className="flex flex-col sm:flex-row justify-center items-center gap-4 mt-6">
+               <Button
+                variant="outline"
+                size="lg"
+                onClick={handleGeneratePlaythroughStory}
+                disabled={isGeneratingStory}
+                className="shadow-md hover:shadow-lg w-full sm:w-auto"
+              >
+                {isGeneratingStory ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <FileText className="mr-2 h-5 w-5" />}
+                Generate My Story
+              </Button>
               <Button
                 variant="outline"
                 size="lg"
                 onClick={restartCurrentAdventure}
-                disabled={!gameData || !gameData.startSceneId}
+                disabled={!gameData || !gameData.startSceneId || isGeneratingStory}
                 className="shadow-md hover:shadow-lg w-full sm:w-auto"
               >
                 <RefreshCw className="mr-2 h-5 w-5" />
                 Restart Adventure
               </Button>
-              <Button variant="default" size="lg" className="shadow-md hover:shadow-lg w-full sm:w-auto" onClick={handleNewAdventure}>
+              <Button variant="default" size="lg" className="shadow-md hover:shadow-lg w-full sm:w-auto" onClick={handleNewAdventure}  disabled={isGeneratingStory}>
                 <ArrowLeft className="mr-2 h-5 w-5" /> Weave a New Adventure
               </Button>
             </div>
           </CardContent>
         </Card>
       )}
+
+      {showStoryDialog && generatedStory && (
+        <Dialog open={showStoryDialog} onOpenChange={setShowStoryDialog}>
+            <DialogContent className="sm:max-w-[600px] max-h-[80vh] flex flex-col">
+                <DialogHeader>
+                    <DialogTitle>Your Adventure Story</DialogTitle>
+                    <DialogDescription>
+                        Here is the narrative of your unique journey. You can read it here or download it as a text file.
+                    </DialogDescription>
+                </DialogHeader>
+                <ScrollArea className="flex-grow p-1 pr-3 -mx-1"> {/* Added ScrollArea */}
+                    <Textarea
+                        value={generatedStory}
+                        readOnly
+                        className="min-h-[300px] text-sm bg-muted/30 h-full" // Ensure textarea takes full height
+                        rows={15} 
+                    />
+                </ScrollArea>
+                <DialogFooter className="mt-4 gap-2 sm:gap-0">
+                     <Button variant="outline" onClick={() => downloadStory(generatedStory, `${gameData?.title || "My Adventure"}_playthrough.txt`)}>
+                        <Download className="mr-2 h-4 w-4" /> Download Story (.txt)
+                    </Button>
+                    <Button onClick={() => setShowStoryDialog(false)}>Close</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
+
+    
