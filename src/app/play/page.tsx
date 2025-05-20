@@ -27,7 +27,7 @@ export default function PlayPage() {
     characterDescription,
     storyText, 
     analysisResult,
-    adventureLanguage, // Get adventureLanguage from context
+    adventureLanguage, 
     playerInventory,
     playerStatusEffects,
     playerAlignment, 
@@ -174,7 +174,7 @@ export default function PlayPage() {
         aiSettings: { 
           provider: aiProvider, 
           ollamaModel: aiProvider === 'ollama' ? ollamaModel : undefined,
-          language: adventureLanguage || "en-US" // Pass adventure language
+          language: adventureLanguage || "en-US" 
         }
       };
       
@@ -287,6 +287,7 @@ export default function PlayPage() {
           )}
         </CardContent>
          <CardFooter className="flex justify-center pt-0 pb-6">
+         {/* Removed restart button from here, will be added to end game screen if desired */}
         </CardFooter>
       </Card>
 
@@ -343,7 +344,7 @@ export default function PlayPage() {
                 key={index}
                 onClick={() => handleChoice(choice)}
                 variant="outline"
-                className="text-left justify-start p-4 h-auto hover:bg-primary/10 hover:border-primary transition-all duration-150 shadow-sm hover:shadow-md text-base"
+                className="text-left justify-start p-4 h-auto hover:bg-primary/10 hover:border-primary transition-all duration-150 shadow-sm hover:shadow-md text-base whitespace-normal"
                 aria-label={`Choose: ${choice.text}`}
               >
                 {choice.text}
@@ -466,5 +467,3 @@ export default function PlayPage() {
     </div>
   );
 }
-
-    
