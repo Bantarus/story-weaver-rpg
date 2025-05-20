@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useCallback } from 'react';
@@ -484,23 +485,26 @@ export default function LibraryPage() {
                         }
                     </DialogDescription>
                 </DialogHeader>
-                <ScrollArea className="flex-grow my-4 min-h-0 border rounded-md bg-background"> {/* Simplified ScrollArea classes */}
-                   <div className="prose prose-sm sm:prose lg:prose-lg xl:prose-xl max-w-none p-4 text-foreground">
-                        {currentReadingStory.storyText.split('\n\n').map((paragraph, index) => {
-                            const trimmedParagraph = paragraph.trim();
-                            if (trimmedParagraph.startsWith('## ')) {
-                                return <h2 key={`h2-${index}`} className="!text-primary !mt-6 !mb-3">{trimmedParagraph.substring(3)}</h2>;
-                            }
-                            if (trimmedParagraph.startsWith('# ')) {
-                                return <h1 key={`h1-${index}`} className="!text-primary !mt-8 !mb-4">{trimmedParagraph.substring(2)}</h1>;
-                            }
-                            if (trimmedParagraph) { 
-                                return <p key={`p-${index}`} className="my-2">{trimmedParagraph}</p>;
-                            }
-                            return null; 
-                        })}
-                   </div>
-                </ScrollArea>
+                {/* Intermediate div to handle flex-grow and overflow for the ScrollArea */}
+                <div className="flex-grow min-h-0 my-4 border rounded-md overflow-hidden">
+                    <ScrollArea className="h-full w-full bg-background"> {/* ScrollArea takes full height of parent */}
+                       <div className="prose prose-sm sm:prose lg:prose-lg xl:prose-xl max-w-none p-4 text-foreground">
+                            {currentReadingStory.storyText.split('\n\n').map((paragraph, index) => {
+                                const trimmedParagraph = paragraph.trim();
+                                if (trimmedParagraph.startsWith('## ')) {
+                                    return <h2 key={`h2-${index}`} className="!text-primary !mt-6 !mb-3 !font-serif">{trimmedParagraph.substring(3)}</h2>;
+                                }
+                                if (trimmedParagraph.startsWith('# ')) {
+                                    return <h1 key={`h1-${index}`} className="!text-primary !mt-8 !mb-4 !font-serif">{trimmedParagraph.substring(2)}</h1>;
+                                }
+                                if (trimmedParagraph) { 
+                                    return <p key={`p-${index}`} className="my-2">{trimmedParagraph}</p>;
+                                }
+                                return null; 
+                            })}
+                       </div>
+                    </ScrollArea>
+                </div>
                 <DialogFooter className="gap-2 sm:gap-0">
                      <Button variant="outline" onClick={() => downloadStoryText(currentReadingStory.storyText, `${currentReadingStory.adventureName || "MyStory"}_playthrough.txt`)}>
                         <Download className="mr-2 h-4 w-4" /> Download (.txt)
@@ -518,3 +522,6 @@ export default function LibraryPage() {
     
 
 
+
+
+    
