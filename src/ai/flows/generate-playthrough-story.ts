@@ -33,6 +33,7 @@ const SceneNodeSchemaForStory = z.object({
 
 export const GeneratePlaythroughStoryInputSchema = z.object({
   gameTitle: z.string().optional().describe("The title of the adventure."),
+  originalStoryText: z.string().optional().describe("The original source story text that the adventure was based on. This provides overall context."),
   scenes: z.record(SceneNodeSchemaForStory).describe("A record of all scene nodes in the game, keyed by scene ID."),
   gameHistory: z.array(z.string()).describe("An ordered list of scene IDs the player traversed."),
   characterDescription: z.string().optional().describe("The original description of the player's character."),
@@ -59,7 +60,14 @@ const prompt = ai.definePrompt({
   output: { schema: GeneratePlaythroughStoryOutputSchema },
   prompt: `You are a master storyteller. Your task is to transform a player's journey through a text-based RPG into a flowing, engaging narrative.
 
-Here is the context for the adventure:
+First, here is the original source material that the RPG adventure was based on, to give you overall context of the world, characters, and themes:
+{{#if originalStoryText}}
+Original Story Context:
+{{{originalStoryText}}}
+---
+{{/if}}
+
+Now, here is the specific context for the adventure the player experienced:
 {{#if gameTitle}}Adventure Title: {{{gameTitle}}}{{/if}}
 {{#if characterDescription}}Player Character: {{{characterDescription}}}{{/if}}
 
@@ -68,19 +76,18 @@ The player progressed through the following scenes in this order:
 - Scene ID: {{{this}}}
 {{/each}}
 
-Use the provided 'scenes' data to construct the story. For each scene in the player's history:
-1. Incorporate the main text of the scene ('scenes[sceneId].text').
-2. Identify which choice the player made to get to the *next* scene in their history. Describe this choice or its consequence as a transition. The choices for a scene 'scenes[sceneId].choices' lists 'text' and 'nextNodeId'. Match the 'nextNodeId' with the ID of the next scene in 'gameHistory'.
-3. If it's an ending scene ('scenes[sceneId].isEnding' is true), use its text and 'endingType' to conclude the story.
+Use the provided 'scenes' data (a map of scene IDs to scene details) to construct the story. For each scene ID in the player's 'gameHistory':
+1. Retrieve the scene details: 'scenes[sceneId].title' (if any), 'scenes[sceneId].text'.
+2. Incorporate the main text of the scene.
+3. Identify which choice the player made from 'scenes[sceneId].choices' to get to the *next* scene in their 'gameHistory'. The choices list contains 'text' and 'nextNodeId'. Match the 'nextNodeId' with the ID of the next scene in 'gameHistory'. Describe this choice or its consequence as a natural transition in the story.
+4. If it's an ending scene ('scenes[sceneId].isEnding' is true), use its text and 'scenes[sceneId].endingType' to conclude the story.
 
-Weave these elements into a single, coherent story. Make it engaging and readable.
+Weave these elements into a single, coherent story. Make it engaging and readable. Do not just list scene texts; connect them smoothly as if narrating a continuous story.
 
 {{#if playerAlignment}}The player's final moral alignment was {{playerAlignment}} (where positive is good, negative is evil, and zero is neutral). You can subtly reflect this in the tone of the ending if appropriate.{{/if}}
 {{#if playerInventory}}Final Inventory: {{#each playerInventory}}{{{this}}}{{#unless @last}}, {{/unless}}{{/each}}.{{/if}}
 {{#if playerStatusEffects}}Final Status Effects: {{#each playerStatusEffects}}{{{this}}}{{#unless @last}}, {{/unless}}{{/each}}.{{/if}}
 If inventory or status effects are mentioned, only include them if they significantly impacted the story's conclusion or character's state in a narratively interesting way.
-
-Focus on narrative flow. Do not just list scene texts. Connect them smoothly.
 
 Generated Story:
 `,
@@ -93,47 +100,15 @@ const generatePlaythroughStoryFlow = ai.defineFlow(
     outputSchema: GeneratePlaythroughStoryOutputSchema,
   },
   async (input) => {
-    // Pre-process input for the prompt if necessary, e.g., to make choices easier to reference
-    // For this prompt, direct templating should work, but complex logic could go here.
+    // The prompt is designed to directly use the input structure.
+    // No complex pre-processing of gameHistory vs scenes needed here for the prompt itself,
+    // as the prompt guides the AI to do the lookup.
 
-    // Construct a map of choices for easier lookup if the prompt struggles
-    const enrichedInput = { ...input, sceneDetailsForPrompt: [] as any[] };
-    input.gameHistory.forEach((sceneId, index) => {
-        const scene = input.scenes[sceneId];
-        if (!scene) return;
-
-        let choiceText = "The story progressed.";
-        if (index < input.gameHistory.length - 1) {
-            const nextSceneIdInHistory = input.gameHistory[index + 1];
-            const madeChoice = scene.choices.find(c => c.nextNodeId === nextSceneIdInHistory);
-            if (madeChoice) {
-                choiceText = `Then, they chose to: "${madeChoice.text}"`;
-            } else {
-                choiceText = `The path led them to the next part of their adventure.`
-            }
-        }
-        enrichedInput.sceneDetailsForPrompt.push({
-            id: scene.id,
-            title: scene.title,
-            text: scene.text,
-            isEnding: scene.isEnding,
-            endingType: scene.endingType,
-            choiceMadeToProgress: index < input.gameHistory.length - 1 ? choiceText : "This was the final scene."
-        });
-    });
-    
-    // The prompt needs to be updated to use enrichedInput.sceneDetailsForPrompt instead of iterating gameHistory and looking up scenes
-    // However, the initial prompt design is simpler and might work. Let's try it first.
-    // If it fails, we can switch to a more complex input structure for the prompt.
-
-    const { output } = await prompt(input); // Use original input for now
+    const { output } = await prompt(input);
     if (!output || !output.playthroughStory) {
       throw new Error('AI failed to generate a playthrough story.');
     }
     return output;
   }
 );
-
-// Add this to src/ai/dev.ts:
-// import '@/ai/flows/generate-playthrough-story.ts';
     

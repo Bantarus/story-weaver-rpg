@@ -24,6 +24,7 @@ export default function PlayPage() {
     currentSceneId, setCurrentSceneId,
     gameHistory, 
     characterDescription,
+    storyText, // Added to get original story text
     playerInventory,
     playerStatusEffects,
     playerAlignment, 
@@ -137,6 +138,7 @@ export default function PlayPage() {
 
       const storyInput: GeneratePlaythroughStoryInput = {
         gameTitle: gameData.title,
+        originalStoryText: storyText || undefined, // Pass the original story text
         scenes: simplifiedScenes,
         gameHistory: gameHistory,
         characterDescription: characterDescription || undefined,
@@ -254,6 +256,9 @@ export default function PlayPage() {
             </div>
           )}
         </CardContent>
+        <CardFooter>
+           {/* Restart button moved to game end screen */}
+        </CardFooter>
       </Card>
 
       {!isGameEnd && (playerInventory.length > 0 || playerStatusEffects.length > 0 || typeof playerAlignment === 'number') && (
@@ -432,3 +437,4 @@ export default function PlayPage() {
     </div>
   );
 }
+
