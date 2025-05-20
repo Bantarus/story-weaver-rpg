@@ -78,7 +78,7 @@ interface GameContextType {
   setStoryText: (text: string | null) => void;
   characterDescription: string | null;
   setCharacterDescription: (desc: string | null) => void;
-  analysisResult: AnalyzeSourceMaterialOutput | null; // Typed
+  analysisResult: AnalyzeSourceMaterialOutput | null; 
   setAnalysisResult: (result: AnalyzeSourceMaterialOutput | null) => void;
   narrativeOutline: string | null;
   setNarrativeOutline: (outline: string | null) => void;
@@ -189,14 +189,17 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     if (isLoaded && gameData && gameData.startSceneId) {
-      if (currentSceneId === gameData.startSceneId && gameHistory.length === 0) {
-        setGameHistoryState([gameData.startSceneId]);
-      } else if (gameHistory.length === 0 && (!currentSceneId || (gameData.scenes && !gameData.scenes[currentSceneId!]))) {
-         setGameHistoryState([gameData.startSceneId]);
-         setCurrentSceneIdState(gameData.startSceneId);
+      if (gameHistory.length === 0 || (currentSceneId && !gameHistory.includes(currentSceneId))) {
+        if (!currentSceneId || (gameData.scenes && !gameData.scenes[currentSceneId])) {
+          setCurrentSceneIdState(gameData.startSceneId);
+          setGameHistoryState([gameData.startSceneId]);
+        } else if (currentSceneId) {
+           setGameHistoryState([currentSceneId]); // Initialize if currentSceneId is valid but history is empty
+        }
       }
     }
   }, [gameData, currentSceneId, gameHistory.length, isLoaded]);
+
 
   useEffect(() => { if (isLoaded) storyText ? localStorage.setItem(STORY_TEXT_KEY, storyText) : localStorage.removeItem(STORY_TEXT_KEY); }, [storyText, isLoaded]);
   useEffect(() => { if (isLoaded) characterDescription ? localStorage.setItem(CHARACTER_DESC_KEY, characterDescription) : localStorage.removeItem(CHARACTER_DESC_KEY); }, [characterDescription, isLoaded]);
@@ -224,25 +227,22 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
   const setDesiredTone = useCallback((tone: DesiredTone) => setDesiredToneState(tone), []);
   const setDesiredLength = useCallback((length: DesiredLength) => setDesiredLengthState(length), []);
   const setKeyThemes = useCallback((themes: string | null) => setKeyThemesState(themes), []);
+  
+  const setCreationStep = useCallback((step: CreationStep) => setCreationStepState(step), []);
+  const setIsLoading = useCallback((loading: boolean) => setIsLoadingState(loading), []);
+  const setError = useCallback((error: string | null) => setErrorState(error), []);
 
   const setCurrentSceneId = useCallback((id: string | null) => {
     setCurrentSceneIdState(id);
     if (id) {
       setGameHistoryState(prevHistory => {
-        if (prevHistory.length === 0 && gameData && id === gameData.startSceneId) {
-          return [id];
-        }
-        if (prevHistory.length > 0 && prevHistory[prevHistory.length - 1] !== id && gameData && gameData.scenes[id]) {
+        if (prevHistory[prevHistory.length - 1] !== id) {
             return [...prevHistory, id];
         }
         return prevHistory;
       });
     }
-  }, [gameData]);
-
-  const setCreationStep = useCallback((step: CreationStep) => setCreationStepState(step), []);
-  const setIsLoading = useCallback((loading: boolean) => setIsLoadingState(loading), []);
-  const setError = useCallback((error: string | null) => setErrorState(error), []);
+  }, []);
 
   const addItemToInventory = useCallback((itemValue: string) => {
     setPlayerInventoryState(prev => prev.includes(itemValue) ? prev : [...prev, itemValue]);
@@ -279,7 +279,9 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
           break;
       }
       if (effect.description) {
-        toast({ title: "Effect Triggered!", description: effect.description, className: "bg-accent text-accent-foreground" });
+        setTimeout(() => {
+          toast({ title: "Effect Triggered!", description: effect.description, className: "bg-accent text-accent-foreground" });
+        }, 0);
       }
     });
   }, [addItemToInventory, removeItemFromInventory, addPlayerStatus, removePlayerStatus, toast]);
@@ -288,7 +290,9 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
     if (typeof shift === 'number' && shift !== 0) {
       setPlayerAlignmentState(prev => {
         const newAlignment = prev + shift;
-        toast({ title: "Alignment Shift", description: `Your alignment shifted by ${shift}. New alignment: ${newAlignment}` });
+        setTimeout(() => {
+          toast({ title: "Alignment Shift", description: `Your alignment shifted by ${shift}. New alignment: ${newAlignment}` });
+        }, 0);
         return newAlignment;
       });
     }
@@ -369,7 +373,9 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
       }
     });
     if (!gameData.id) {
-        setGameDataState(adventureToSave);
+        setGameDataState(prevGameData => ({...prevGameData!, id: adventureToSave.id, adventureName: adventureToSave.adventureName}));
+    } else if(gameData.id && gameData.adventureName !== adventureToSave.adventureName) {
+        setGameDataState(prevGameData => ({...prevGameData!, adventureName: adventureToSave.adventureName}));
     }
     return true;
   }, [gameData]);
@@ -377,9 +383,9 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
   const loadAdventureFromLibrary = useCallback((adventureId: string): boolean => {
     const adventureToLoad = savedAdventures.find(adv => adv.id === adventureId);
     if (adventureToLoad) {
+      resetCreationProgress(); 
       setGameDataInternal(adventureToLoad);
-      resetCreationProgress(); // This will clear storyText, characterDescription, etc.
-      setCreationStepState('generate'); // Or directly to play, depending on desired flow
+      setCreationStepState('generate'); 
       return true;
     }
     return false;
@@ -407,9 +413,9 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
       setErrorState(null);
     } else {
       console.warn("Cannot restart adventure: gameData, startSceneId, or start scene is missing/invalid.");
-      resetFullGame();
+      resetFullGame(); // resetFullGame is stable due to its dependency on stable resetCreationProgress
     }
-  }, [gameData, resetFullGame]);
+  }, [gameData, resetFullGame]); // resetFullGame is stable
 
   if (!isLoaded) {
     return null;
