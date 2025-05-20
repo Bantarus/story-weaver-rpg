@@ -10,9 +10,16 @@ This is the top-level object representing a complete RPG adventure.
 
 ```typescript
 export interface GameData {
+  id?: string;                         // Optional unique ID, used for library management.
+  adventureName?: string;              // Optional user-defined name for the adventure, used for library.
   title?: string;                        // Optional overall title for the adventure.
   startSceneId: string;                 // The ID of the scene where the game begins.
   scenes: Record<string, SceneNode>;    // A map (object) of all scenes, keyed by their unique scene ID.
+  // Optional fields for persisting original creation context with saved/imported game data
+  storyText?: string;
+  characterDescription?: string;
+  analysisResult?: AnalyzeSourceMaterialOutput | null; // From 'analyzeSourceMaterial' flow
+  narrativeOutline?: string | null;                  // From 'generateNarrativeOutline' flow
 }
 ```
 
@@ -26,6 +33,7 @@ export interface SceneNode {
   title?: string;                  // Optional title displayed for this scene.
   text: string;                    // The main narrative text for the scene.
   choices: SceneChoice[];          // An array of choices available to the player in this scene.
+  effects?: Effect[];              // Optional array of effects that trigger when this scene loads.
   visualHint?: string;             // Optional textual hint for visual elements (e.g., "dark forest, glowing mushrooms").
   soundEffect?: string;            // Optional textual hint for sound effects (e.g., "rustling leaves, distant wolf howl").
   isEnding?: boolean;              // Optional flag. If true, this scene represents an ending.
@@ -36,6 +44,7 @@ export interface SceneNode {
 -   **`id`**: Must be unique across all scenes in a `GameData` object.
 -   **`text`**: Can contain newline characters (`\n`) for paragraph breaks.
 -   **`choices`**: If empty or not present, and `isEnding` is not explicitly true, the game might treat it as an implicit ending or a point where the narrative stops. If `isEnding` is true, `choices` should ideally be empty.
+-   **`effects`**: An array of `Effect` objects applied when the scene is entered.
 
 ## `SceneChoice` Interface
 
@@ -45,6 +54,22 @@ This interface defines a single choice presented to the player within a `SceneNo
 export interface SceneChoice {
   text: string;           // The text displayed to the player for this choice.
   nextNodeId: string;     // The `id` of the `SceneNode` to transition to if this choice is selected. This ID must exist in the `GameData.scenes` record.
+  effects?: Effect[];      // Optional array of effects that are applied if this choice is selected.
+  alignmentEffect?: number; // Optional. A numerical value representing the moral alignment shift for this choice (e.g., 1 for good, -1 for evil, 0 for neutral).
+}
+```
+
+## `Effect` Interface & `EffectType`
+
+These define the structure for in-game effects.
+
+```typescript
+export type EffectType = "ADD_ITEM" | "REMOVE_ITEM" | "ADD_STATUS" | "REMOVE_STATUS";
+
+export interface Effect {
+  type: EffectType;
+  value: string;        // Identifier for the item or status (e.g., "rusty_key", "poisoned").
+  description?: string; // Optional player-facing message (e.g., "You found a Rusty Key!").
 }
 ```
 
@@ -54,3 +79,5 @@ export interface SceneChoice {
 -   The `GameData.startSceneId` points to one of these `SceneNode`s.
 -   Each `SceneNode` can have multiple `SceneChoice` objects in its `choices` array.
 -   Each `SceneChoice.nextNodeId` points to the `id` of another `SceneNode` in the same `GameData.scenes` record, creating the branching narrative.
+-   Both `SceneNode` and `SceneChoice` can have an array of `effects` that modify player state (inventory, status).
+-   `SceneChoice` can have an `alignmentEffect` that modifies the player's moral alignment.
