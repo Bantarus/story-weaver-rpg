@@ -41,6 +41,11 @@ const GeneratePlaythroughStoryInputSchema = z.object({
   playerAlignment: z.number().optional().describe("The player's final alignment score."),
   playerInventory: z.array(z.string()).optional().describe("The player's final inventory items."),
   playerStatusEffects: z.array(z.string()).optional().describe("The player's final status effects."),
+  // Added for model selection
+  aiSettings: z.object({
+    provider: z.enum(['googleAI', 'ollama']).optional().default('googleAI'),
+    ollamaModel: z.string().optional(),
+  }).optional(),
 });
 export type GeneratePlaythroughStoryInput = z.infer<typeof GeneratePlaythroughStoryInputSchema>;
 
@@ -55,7 +60,7 @@ export async function generatePlaythroughStory(
   return generatePlaythroughStoryFlow(input);
 }
 
-const prompt = ai.definePrompt({
+const generatePlaythroughStoryPromptObj = ai.definePrompt({
   name: 'generatePlaythroughStoryPrompt',
   input: { schema: GeneratePlaythroughStoryInputSchema },
   output: { schema: GeneratePlaythroughStoryOutputSchema },
@@ -128,7 +133,16 @@ const generatePlaythroughStoryFlow = ai.defineFlow(
     outputSchema: GeneratePlaythroughStoryOutputSchema,
   },
   async (input) => {
-    const { output } = await prompt(input);
+    let modelName = 'googleai/gemini-2.0-flash'; // Default model
+    if (input.aiSettings?.provider === 'ollama' && input.aiSettings?.ollamaModel) {
+      modelName = `ollama/${input.aiSettings.ollamaModel}`;
+    }
+
+    // Filter input for the prompt
+    const promptInput = { ...input };
+    delete promptInput.aiSettings; // Remove aiSettings from prompt input
+
+    const { output } = await generatePlaythroughStoryPromptObj(promptInput, { model: modelName });
     if (!output || !output.playthroughStory) {
       throw new Error('AI failed to generate a playthrough story.');
     }

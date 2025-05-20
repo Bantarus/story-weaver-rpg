@@ -32,6 +32,11 @@ const GenerateNarrativeOutlineInputSchema = z.object({
     .string()
     .optional()
     .describe('Specific themes from the source story or character goals that the user wants to emphasize in the narrative outline.'),
+  // Added for model selection
+  aiSettings: z.object({
+    provider: z.enum(['googleAI', 'ollama']).optional().default('googleAI'),
+    ollamaModel: z.string().optional(),
+  }).optional(),
 });
 export type GenerateNarrativeOutlineInput = z.infer<
   typeof GenerateNarrativeOutlineInputSchema
@@ -54,7 +59,7 @@ export async function generateNarrativeOutline(
   return generateNarrativeOutlineFlow(input);
 }
 
-const prompt = ai.definePrompt({
+const generateNarrativeOutlinePromptObj = ai.definePrompt({
   name: 'generateNarrativeOutlinePrompt',
   input: {schema: GenerateNarrativeOutlineInputSchema},
   output: {schema: GenerateNarrativeOutlineOutputSchema},
@@ -102,12 +107,25 @@ const generateNarrativeOutlineFlow = ai.defineFlow(
     inputSchema: GenerateNarrativeOutlineInputSchema,
     outputSchema: GenerateNarrativeOutlineOutputSchema,
   },
-  async input => {
-    const {output} = await prompt(input);
+  async (input) => {
+    let modelName = 'googleai/gemini-2.0-flash'; // Default model
+    if (input.aiSettings?.provider === 'ollama' && input.aiSettings?.ollamaModel) {
+      modelName = `ollama/${input.aiSettings.ollamaModel}`;
+    }
+    
+    // Filter input for the prompt to only include fields defined in its schema
+    const promptInput = {
+        storyText: input.storyText,
+        characterDescription: input.characterDescription,
+        desiredTone: input.desiredTone,
+        desiredLength: input.desiredLength,
+        keyThemes: input.keyThemes,
+    };
+
+    const {output} = await generateNarrativeOutlinePromptObj(promptInput, { model: modelName });
     if (!output || !output.narrativeOutline) {
       throw new Error('AI failed to generate a narrative outline.');
     }
     return output;
   }
 );
-

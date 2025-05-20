@@ -4,6 +4,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useGame, type SceneNode, type SceneChoice, type AnalyzeSourceMaterialOutput, type Effect } from "@/context/GameContext";
+import { useSettings } from "@/context/SettingsContext"; // Added
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -36,6 +37,8 @@ export default function PlayPage() {
     resetFullGame,
     restartCurrentAdventure 
   } = useGame();
+
+  const { aiProvider, ollamaModel, isSettingsLoaded } = useSettings(); // Added
   
   const [currentScene, setCurrentScene] = useState<SceneNode | null>(null);
   const [showText, setShowText] = useState(false); 
@@ -105,7 +108,7 @@ export default function PlayPage() {
     const file = new Blob([storyTextToDownload], {type: 'text/plain;charset=utf-8'});
     element.href = URL.createObjectURL(file);
     element.download = filename;
-    document.body.appendChild(element); // Required for this to work in FireFox
+    document.body.appendChild(element); 
     element.click();
     document.body.removeChild(element);
     URL.revokeObjectURL(element.href);
@@ -167,6 +170,7 @@ export default function PlayPage() {
         playerAlignment: playerAlignment,
         playerInventory: playerInventory.length > 0 ? playerInventory : undefined,
         playerStatusEffects: playerStatusEffects.length > 0 ? playerStatusEffects : undefined,
+        aiSettings: { provider: aiProvider, ollamaModel: aiProvider === 'ollama' ? ollamaModel : undefined }
       };
       
       const result = await generatePlaythroughStory(storyInput);
@@ -183,8 +187,7 @@ export default function PlayPage() {
     }
   };
 
-
-  if (contextIsLoading || !gameData && !contextError) { 
+  if (!isSettingsLoaded || contextIsLoading || !gameData && !contextError) { 
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-200px)]">
         <Loader2 className="h-16 w-16 animate-spin text-primary mb-4" />
@@ -459,4 +462,3 @@ export default function PlayPage() {
     </div>
   );
 }
-

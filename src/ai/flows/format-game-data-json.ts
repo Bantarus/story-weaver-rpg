@@ -15,6 +15,11 @@ const FormatGameDataJsonInputSchema = z.object({
   narrativeOutline: z
     .string()
     .describe('The narrative outline to be formatted into structured game JSON data.'),
+  // Added for model selection
+  aiSettings: z.object({
+    provider: z.enum(['googleAI', 'ollama']).optional().default('googleAI'),
+    ollamaModel: z.string().optional(),
+  }).optional(),
 });
 export type FormatGameDataJsonInput = z.infer<typeof FormatGameDataJsonInputSchema>;
 
@@ -67,7 +72,7 @@ export async function formatGameDataJson(
   return formatGameDataJsonFlow(input);
 }
 
-const formatGameDataJsonPrompt = ai.definePrompt({
+const formatGameDataJsonPromptObj = ai.definePrompt({
   name: 'formatGameDataJsonPrompt',
   input: {schema: FormatGameDataJsonInputSchema},
   // Output schema removed here; validation will be done after manual processing
@@ -109,7 +114,7 @@ Ensure that:
 - The narrative flows logically based on the provided outline.
 - Scene IDs are descriptive and unique.
 - The \`startSceneId\` refers to a valid scene 'id'.
-- Effects are plausible for the narrative. For example, if a choice involves picking up a key, generate an ADD_ITEM effect for "key". If a scene describes entering a poisoned swamp, generate an ADD_STATUS effect for "poisoned".
+- Effects are plausible for the narrative. For example, if a choice involves picking up a key, generate an ADD_ITEM effect for 'key'. If a scene describes entering a poisoned swamp, generate an ADD_STATUS effect for 'poisoned'.
 - Assign 'alignmentEffect' values appropriately: +1 for good/altruistic choices, -1 for evil/selfish choices, and 0 for neutral or morally ambiguous choices. For example, a choice 'Steal the bread' might have 'alignmentEffect: -1', while 'Share your food' might have 'alignmentEffect: 1'.
 `,
 });
@@ -121,7 +126,15 @@ const formatGameDataJsonFlow = ai.defineFlow(
     outputSchema: AIGameDataSchema, 
   },
   async (input): Promise<FormatGameDataJsonOutput> => { 
-    const llmResponse = await formatGameDataJsonPrompt(input); 
+    let modelName = 'googleai/gemini-2.0-flash'; // Default model
+    if (input.aiSettings?.provider === 'ollama' && input.aiSettings?.ollamaModel) {
+      modelName = `ollama/${input.aiSettings.ollamaModel}`;
+    }
+
+    const llmResponse = await formatGameDataJsonPromptObj(
+        { narrativeOutline: input.narrativeOutline }, // Pass only relevant fields to prompt
+        { model: modelName }
+    ); 
     let aiOutputText = llmResponse.text;
 
     if (!aiOutputText) {
@@ -195,4 +208,3 @@ const formatGameDataJsonFlow = ai.defineFlow(
     }
   }
 );
-

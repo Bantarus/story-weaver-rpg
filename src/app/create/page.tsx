@@ -4,6 +4,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useGame, type GameData, type SceneNode, type DesiredTone, type DesiredLength, type CharacterProfile } from "@/context/GameContext";
+import { useSettings } from "@/context/SettingsContext"; // Added
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, BookText, UserPlus, Wand2, AlertCircle, CheckCircle, Play, Palette, Scale, Sparkles, RefreshCcw, Save, LibraryBig, UserCheck, UserX } from "lucide-react";
+import { Loader2, BookText, UserPlus, Wand2, AlertCircle, CheckCircle, Play, Palette, Scale, Sparkles, RefreshCcw, Save, LibraryBig, UserCheck } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 import { analyzeSourceMaterial } from "@/ai/flows/analyze-source-material";
@@ -50,6 +51,8 @@ export default function CreatePage() {
     getCharacterProfileById
   } = useGame();
 
+  const { aiProvider, ollamaModel, isSettingsLoaded } = useSettings(); // Added
+
   // Local state for character form fields
   const [charName, setCharNameLocal] = useState("");
   const [charArchetype, setCharArchetypeLocal] = useState("");
@@ -61,7 +64,6 @@ export default function CreatePage() {
 
 
   useEffect(() => {
-    // Only parse characterDescription if on character step, it exists, AND no character is currently "loaded" from library
     if (characterDescription && creationStep === 'character' && !loadedCharId) { 
       const nameMatch = characterDescription.match(/Name: (.*?)(?:\nArchetype:|\nBackground:|\nGoals:|$)/s);
       if (nameMatch) setCharNameLocal(nameMatch[1].trim()); else setCharNameLocal("");
@@ -72,7 +74,6 @@ export default function CreatePage() {
       const goalsMatch = characterDescription.match(/Goals: (.*)/s);
       if (goalsMatch) setCharGoalsLocal(goalsMatch[1].trim()); else setCharGoalsLocal("");
     } else if (creationStep === 'character' && !loadedCharId && !characterDescription) {
-      // If no characterDescription and no loaded char on character step, ensure fields are clear
       setCharNameLocal("");
       setCharArchetypeLocal("");
       setCharBackgroundLocal("");
@@ -109,7 +110,10 @@ export default function CreatePage() {
     setIsLoading(true);
     setError(null);
     try {
-      const result = await analyzeSourceMaterial({ storyText });
+      const result = await analyzeSourceMaterial({ 
+        storyText,
+        aiSettings: { provider: aiProvider, ollamaModel: aiProvider === 'ollama' ? ollamaModel : undefined }
+      });
       setAnalysisResult(result);
       toast({ title: "Story Analysis Complete", description: "Proceed to character creation.", className: "bg-primary text-primary-foreground" });
       setCreationStep("character");
@@ -158,6 +162,7 @@ export default function CreatePage() {
         desiredTone: desiredTone === "Default" ? undefined : desiredTone,
         desiredLength: desiredLength === "Default" ? undefined : desiredLength,
         keyThemes: keyThemes || undefined,
+        aiSettings: { provider: aiProvider, ollamaModel: aiProvider === 'ollama' ? ollamaModel : undefined }
       });
       setNarrativeOutline(result.narrativeOutline);
       toast({ title: "Narrative Outline Generated", description: "Ready to generate the full game data.", className: "bg-primary text-primary-foreground" });
@@ -190,7 +195,10 @@ export default function CreatePage() {
           return;
         }
 
-        const aiFormattedOutput: FormatGameDataJsonOutput = await formatGameDataJson({ narrativeOutline });
+        const aiFormattedOutput: FormatGameDataJsonOutput = await formatGameDataJson({ 
+            narrativeOutline,
+            aiSettings: { provider: aiProvider, ollamaModel: aiProvider === 'ollama' ? ollamaModel : undefined }
+        });
         
         if (!aiFormattedOutput || !aiFormattedOutput.scenes || !aiFormattedOutput.startSceneId || aiFormattedOutput.scenes.length === 0) {
             console.error("AI output structure error:", aiFormattedOutput);
@@ -374,13 +382,19 @@ export default function CreatePage() {
       c.goals === charGoals.trim()
     )) {
       // Scenario: Form matches an existing character in library, but it wasn't explicitly loaded.
-      // To avoid confusion, we'll consider it a new save unless it's actively loaded.
-      // We can let the user save it again, and saveCharacterProfile will assign a new ID if no ID is passed.
-      // Or, if they selected that character from the dropdown, loadedCharId would be set.
   }
 
 
   const isCurrentAdventureSaved = gameData && gameData.id && isAdventureInLibrary(gameData.id);
+
+  if (!isSettingsLoaded) {
+    return (
+         <div className="flex flex-col items-center justify-center min-h-[calc(100vh-200px)]">
+            <Loader2 className="h-16 w-16 animate-spin text-primary mb-4" />
+            <p className="text-xl text-muted-foreground">Loading settings...</p>
+        </div>
+    );
+  }
 
 
   return (
@@ -643,5 +657,3 @@ export default function CreatePage() {
     </div>
   );
 }
-
-    
