@@ -4,8 +4,9 @@
 import { useGame, type CharacterProfile } from '@/context/GameContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AlertCircle, Play, Trash2, BookOpenText, PlusCircle, Frown, LibraryBig, Users, UserCog } from 'lucide-react';
+import { AlertCircle, Play, Trash2, BookOpenText, PlusCircle, Frown, LibraryBig, Users, UserCog, UserCircle2 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
@@ -162,11 +163,14 @@ export default function LibraryPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {savedCharacters.map((character: CharacterProfile) => (
                 <Card key={character.id} className="shadow-lg flex flex-col hover:shadow-xl transition-shadow duration-200">
-                  <CardHeader>
-                    <CardTitle className="line-clamp-2">{character.name}</CardTitle>
-                    <CardDescription className="text-sm text-muted-foreground">{character.archetype}</CardDescription>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center gap-3 mb-2">
+                      <UserCircle2 className="h-10 w-10 text-primary flex-shrink-0" />
+                      <CardTitle className="line-clamp-2 text-xl">{character.name}</CardTitle>
+                    </div>
+                    <Badge variant="secondary" className="w-fit">{character.archetype}</Badge>
                   </CardHeader>
-                  <CardContent className="flex-grow">
+                  <CardContent className="flex-grow pt-0">
                      <p className="text-sm text-muted-foreground line-clamp-3 h-[60px] overflow-hidden">
                         {character.background || "No background provided."}
                      </p>
@@ -193,4 +197,3 @@ export default function LibraryPage() {
   );
 }
 
-    
