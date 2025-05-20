@@ -40,7 +40,7 @@ const AnalysisResultSchemaForStory = z.object({
 }).optional().describe("Structured analysis of the original story: plot points, characters, settings, themes, tone.");
 
 
-export const GeneratePlaythroughStoryInputSchema = z.object({
+const GeneratePlaythroughStoryInputSchema = z.object({
   gameTitle: z.string().optional().describe("The title of the adventure."),
   originalStoryText: z.string().optional().describe("The original source story text that the adventure was based on. This provides overall context."),
   analysisResult: AnalysisResultSchemaForStory,
@@ -53,7 +53,7 @@ export const GeneratePlaythroughStoryInputSchema = z.object({
 });
 export type GeneratePlaythroughStoryInput = z.infer<typeof GeneratePlaythroughStoryInputSchema>;
 
-export const GeneratePlaythroughStoryOutputSchema = z.object({
+const GeneratePlaythroughStoryOutputSchema = z.object({
   playthroughStory: z.string().describe("The generated narrative text of the player's unique playthrough."),
 });
 export type GeneratePlaythroughStoryOutput = z.infer<typeof GeneratePlaythroughStoryOutputSchema>;
