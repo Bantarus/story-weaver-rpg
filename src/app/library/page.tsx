@@ -485,9 +485,21 @@ export default function LibraryPage() {
                         }
                     </DialogDescription>
                 </DialogHeader>
-                <ScrollArea className="flex-grow p-1 pr-4 -mx-1 my-4 min-h-0 border rounded-md bg-background"> {/* Changed min-h-[300px] to min-h-0 */}
-                   <div className="prose prose-sm sm:prose lg:prose-lg xl:prose-xl max-w-none p-4 text-foreground whitespace-pre-line">
-                        {currentReadingStory.storyText}
+                <ScrollArea className="flex-grow p-1 pr-4 -mx-1 my-4 min-h-0 border rounded-md bg-background">
+                   <div className="prose prose-sm sm:prose lg:prose-lg xl:prose-xl max-w-none p-4 text-foreground">
+                        {currentReadingStory.storyText.split('\n\n').map((paragraph, index) => {
+                            const trimmedParagraph = paragraph.trim();
+                            if (trimmedParagraph.startsWith('## ')) {
+                                return <h2 key={index} className="!text-primary !mt-6 !mb-3">{trimmedParagraph.substring(3)}</h2>;
+                            }
+                            if (trimmedParagraph.startsWith('# ')) {
+                                return <h1 key={index} className="!text-primary !mt-8 !mb-4">{trimmedParagraph.substring(2)}</h1>;
+                            }
+                            if (trimmedParagraph) { // Render non-empty paragraphs
+                                return <p key={index} className="my-2">{trimmedParagraph}</p>;
+                            }
+                            return null; // Skip empty lines after split if any
+                        })}
                    </div>
                 </ScrollArea>
                 <DialogFooter className="gap-2 sm:gap-0">
@@ -505,3 +517,4 @@ export default function LibraryPage() {
     
 
     
+
