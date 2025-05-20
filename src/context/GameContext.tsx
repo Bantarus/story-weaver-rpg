@@ -13,6 +13,7 @@ const NARRATIVE_OUTLINE_KEY = 'storyWeaver_narrativeOutline';
 const DESIRED_TONE_KEY = 'storyWeaver_desiredTone';
 const DESIRED_LENGTH_KEY = 'storyWeaver_desiredLength';
 const KEY_THEMES_KEY = 'storyWeaver_keyThemes';
+const ADVENTURE_LANGUAGE_KEY = 'storyWeaver_adventureLanguage'; // New key
 
 const GAME_DATA_KEY = 'storyWeaver_gameData';
 const CURRENT_SCENE_ID_KEY = 'storyWeaver_currentSceneId';
@@ -49,6 +50,7 @@ export interface GameData {
   title?: string;
   startSceneId: string;
   scenes: Record<string, SceneNode>;
+  language?: string; // New field
   // Optional fields that might come from an imported GameData file
   storyText?: string;
   characterDescription?: string;
@@ -78,6 +80,9 @@ export interface SceneChoice {
 export type CreationStep = 'story' | 'character' | 'generate' | 'error';
 export type DesiredTone = "Default" | "Heroic" | "Mysterious" | "Comedic" | "Tragic" | "Dramatic" | string;
 export type DesiredLength = "Default" | "Short" | "Medium" | "Long" | string;
+// Define common languages - expand as needed
+export type AdventureLanguage = "en-US" | "es-ES" | "fr-FR" | "de-DE" | string;
+
 
 export interface AnalyzeSourceMaterialOutput {
   plotPoints: string;
@@ -104,6 +109,8 @@ interface GameContextType {
   setDesiredLength: (length: DesiredLength) => void;
   keyThemes: string | null;
   setKeyThemes: (themes: string | null) => void;
+  adventureLanguage: AdventureLanguage; // New state
+  setAdventureLanguage: (lang: AdventureLanguage) => void; // New setter
 
   gameData: GameData | null;
   setGameData: (data: GameData | null) => void;
@@ -154,6 +161,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
   const [desiredTone, setDesiredToneState] = useState<DesiredTone>("Default");
   const [desiredLength, setDesiredLengthState] = useState<DesiredLength>("Default");
   const [keyThemes, setKeyThemesState] = useState<string | null>(null);
+  const [adventureLanguage, setAdventureLanguageState] = useState<AdventureLanguage>("en-US"); // New state default
   const [creationStep, setCreationStepState] = useState<CreationStep>('story');
 
   const [gameData, setGameDataState] = useState<GameData | null>(null);
@@ -179,6 +187,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
     setDesiredToneState("Default");
     setDesiredLengthState("Default");
     setKeyThemesState(null);
+    setAdventureLanguageState("en-US"); // Reset language
     localStorage.removeItem(STORY_TEXT_KEY);
     localStorage.removeItem(CHARACTER_DESC_KEY);
     localStorage.removeItem(ANALYSIS_RESULT_KEY);
@@ -186,6 +195,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
     localStorage.removeItem(DESIRED_TONE_KEY);
     localStorage.removeItem(DESIRED_LENGTH_KEY);
     localStorage.removeItem(KEY_THEMES_KEY);
+    localStorage.removeItem(ADVENTURE_LANGUAGE_KEY); // Remove language
     setErrorState(null);
   }, []);
 
@@ -205,6 +215,8 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
     if (storedDesiredLength) setDesiredLengthState(storedDesiredLength as DesiredLength);
     const storedKeyThemes = localStorage.getItem(KEY_THEMES_KEY);
     if (storedKeyThemes) setKeyThemesState(storedKeyThemes);
+    const storedAdventureLanguage = localStorage.getItem(ADVENTURE_LANGUAGE_KEY); // Load language
+    if (storedAdventureLanguage) setAdventureLanguageState(storedAdventureLanguage as AdventureLanguage);
     
     const storedGameData = localStorage.getItem(GAME_DATA_KEY);
     if (storedGameData) setGameDataState(JSON.parse(storedGameData));
@@ -216,13 +228,12 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
     if (storedGameHistory) setGameHistoryState(JSON.parse(storedGameHistory));
 
     const storedCreationStep = localStorage.getItem(CREATION_STEP_KEY);
-    // If gameData exists (likely from a previous session), ensure creationStep isn't 'story' or 'character'
     if (storedGameData && storedCreationStep && (storedCreationStep === 'story' || storedCreationStep === 'character')) {
       setCreationStepState('generate');
     } else if (storedCreationStep) {
       setCreationStepState(storedCreationStep as CreationStep);
     } else {
-      setCreationStepState('story'); // Default if nothing stored
+      setCreationStepState('story'); 
     }
 
     const storedPlayerInventory = localStorage.getItem(PLAYER_INVENTORY_KEY);
@@ -245,23 +256,23 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     if (isLoaded && gameData && gameData.startSceneId && gameData.scenes[gameData.startSceneId]) {
         if (gameHistory.length === 0 || (currentSceneId && !gameHistory.includes(currentSceneId))) {
-            // If history is empty or current scene not in history, re-initialize from start or current
             if (!currentSceneId || !gameData.scenes[currentSceneId]) {
                 setCurrentSceneIdState(gameData.startSceneId);
                 setGameHistoryState([gameData.startSceneId]);
             } else {
-                // Current scene ID is valid, ensure history reflects at least this
                 setGameHistoryState(prevHistory => {
                     if (!prevHistory.includes(currentSceneId)) return [currentSceneId];
-                    return prevHistory; // Or maybe just set it to [currentSceneId] if logic implies reset
+                    return prevHistory; 
                 });
             }
         }
+         // Set adventureLanguage from loaded gameData if available
+        if (gameData.language) {
+          setAdventureLanguageState(gameData.language as AdventureLanguage);
+        }
     } else if (isLoaded && gameData && (!gameData.startSceneId || !gameData.scenes[gameData.startSceneId])) {
-        // Game data exists but start scene is invalid, this is a corrupted state
         console.error("Loaded gameData has an invalid startSceneId. Clearing game data.");
-        setGameDataState(null); // Clear corrupted game data
-        // resetFullGame(); // Consider full reset if this happens
+        setGameDataState(null); 
     }
   }, [gameData, currentSceneId, gameHistory.length, isLoaded]);
 
@@ -273,6 +284,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => { if (isLoaded) desiredTone ? localStorage.setItem(DESIRED_TONE_KEY, desiredTone) : localStorage.removeItem(DESIRED_TONE_KEY); }, [desiredTone, isLoaded]);
   useEffect(() => { if (isLoaded) desiredLength ? localStorage.setItem(DESIRED_LENGTH_KEY, desiredLength) : localStorage.removeItem(DESIRED_LENGTH_KEY); }, [desiredLength, isLoaded]);
   useEffect(() => { if (isLoaded) keyThemes ? localStorage.setItem(KEY_THEMES_KEY, keyThemes) : localStorage.removeItem(KEY_THEMES_KEY); }, [keyThemes, isLoaded]);
+  useEffect(() => { if (isLoaded) adventureLanguage ? localStorage.setItem(ADVENTURE_LANGUAGE_KEY, adventureLanguage) : localStorage.removeItem(ADVENTURE_LANGUAGE_KEY); }, [adventureLanguage, isLoaded]); // Save language
   useEffect(() => { if (isLoaded) localStorage.setItem(CREATION_STEP_KEY, creationStep); }, [creationStep, isLoaded]);
 
   useEffect(() => { if (isLoaded) gameData ? localStorage.setItem(GAME_DATA_KEY, JSON.stringify(gameData)) : localStorage.removeItem(GAME_DATA_KEY); }, [gameData, isLoaded]);
@@ -293,6 +305,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
   const setDesiredTone = useCallback((tone: DesiredTone) => setDesiredToneState(tone), []);
   const setDesiredLength = useCallback((length: DesiredLength) => setDesiredLengthState(length), []);
   const setKeyThemes = useCallback((themes: string | null) => setKeyThemesState(themes), []);
+  const setAdventureLanguage = useCallback((lang: AdventureLanguage) => setAdventureLanguageState(lang), []); // New setter
   
   const setCreationStep = useCallback((step: CreationStep) => setCreationStepState(step), []);
   const setIsLoading = useCallback((loading: boolean) => setIsLoadingState(loading), []);
@@ -365,14 +378,14 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
   }, [toast]);
 
   const resetFullGame = useCallback(() => {
-    resetCreationProgress();
+    resetCreationProgress(); // This now also resets adventureLanguage
     setGameDataState(null);
     setCurrentSceneIdState(null);
     setGameHistoryState([]);
     setPlayerInventoryState([]);
     setPlayerStatusEffectsState([]);
     setPlayerAlignmentState(0); 
-    setCreationStepState('story'); // Always reset to story input
+    setCreationStepState('story'); 
     localStorage.removeItem(GAME_DATA_KEY);
     localStorage.removeItem(CURRENT_SCENE_ID_KEY);
     localStorage.removeItem(GAME_HISTORY_KEY);
@@ -388,24 +401,23 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
     if (data && data.startSceneId && data.scenes[data.startSceneId]) {
       setCurrentSceneIdState(data.startSceneId);
       setGameHistoryState([data.startSceneId]);
-      setPlayerInventoryState([]); // Reset for new game
-      setPlayerStatusEffectsState([]); // Reset for new game
-      setPlayerAlignmentState(0); // Reset for new game
+      setPlayerInventoryState([]); 
+      setPlayerStatusEffectsState([]); 
+      setPlayerAlignmentState(0); 
       
-      // If imported data also includes previous story/character context, set it
       if (data.storyText) setStoryTextState(data.storyText);
       if (data.characterDescription) setCharacterDescriptionState(data.characterDescription);
       if (data.analysisResult) setAnalysisResultState(data.analysisResult);
       if (data.narrativeOutline) setNarrativeOutlineState(data.narrativeOutline);
+      if (data.language) setAdventureLanguageState(data.language as AdventureLanguage); // Set language from imported gameData
 
-    } else if (!data) { // Explicitly null, meaning reset active game
+    } else if (!data) { 
       setCurrentSceneIdState(null);
       setGameHistoryState([]);
       setPlayerInventoryState([]);
       setPlayerStatusEffectsState([]);
       setPlayerAlignmentState(0);
     } else if (data && (!data.startSceneId || !data.scenes[data.startSceneId])) {
-      // Data is present but startSceneId is invalid
       console.error("setGameDataInternal: Provided gameData has an invalid startSceneId. Clearing active game.");
       setGameDataState(null);
       setCurrentSceneIdState(null);
@@ -414,7 +426,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
       setPlayerStatusEffectsState([]);
       setPlayerAlignmentState(0);
       setErrorState("Loaded adventure data is corrupted (invalid start scene). Please import again or create a new adventure.");
-      setCreationStepState('error'); // Or 'story' to allow immediate new creation
+      setCreationStepState('error'); 
     }
   }, []);
 
@@ -426,6 +438,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
       ...gameData,
       id: gameData.id || crypto.randomUUID(),
       adventureName: name,
+      language: adventureLanguage, // Ensure language is saved with the adventure
     };
 
     setSavedAdventuresState(prevAdventures => {
@@ -438,41 +451,42 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
         return [...prevAdventures, adventureToSave];
       }
     });
-    // Update the active gameData in context to reflect its saved state (ID and name)
-    if (!gameData.id || gameData.adventureName !== adventureToSave.adventureName) {
+    if (!gameData.id || gameData.adventureName !== adventureToSave.adventureName || gameData.language !== adventureToSave.language) {
         setGameDataState(prevGameData => ({
             ...prevGameData!, 
             id: adventureToSave.id, 
-            adventureName: adventureToSave.adventureName
+            adventureName: adventureToSave.adventureName,
+            language: adventureToSave.language
         }));
     }
     return true;
-  }, [gameData]);
+  }, [gameData, adventureLanguage]);
 
   const loadAdventureFromLibrary = useCallback((adventureId: string): boolean => {
     const adventureToLoad = savedAdventures.find(adv => adv.id === adventureId);
     if (adventureToLoad) {
-      setGameDataInternal(adventureToLoad); // This now also resets player states
-      // For imported/loaded library games, it's good to be on 'generate' step
+      setGameDataInternal(adventureToLoad); 
+      if (adventureToLoad.language) { // Also set context language if present
+        setAdventureLanguageState(adventureToLoad.language as AdventureLanguage);
+      }
       setCreationStepState('generate'); 
       return true;
     }
     return false;
-  }, [savedAdventures, setGameDataInternal, setCreationStepState]);
+  }, [savedAdventures, setGameDataInternal, setAdventureLanguageState]);
 
   const deleteAdventureFromLibrary = useCallback((adventureId: string) => {
     setSavedAdventuresState(prevAdventures => prevAdventures.filter(adv => adv.id !== adventureId));
     if (gameData && gameData.id === adventureId) {
-        // If deleting the active game, reset the active game state but not necessarily full creation progress
         setGameDataState(null);
         setCurrentSceneIdState(null);
         setGameHistoryState([]);
         setPlayerInventoryState([]);
         setPlayerStatusEffectsState([]);
         setPlayerAlignmentState(0);
-        setCreationStepState('story'); // Go back to story input if active game deleted
+        setCreationStepState('story'); 
     }
-  }, [gameData, setCreationStepState]);
+  }, [gameData]);
 
   const isAdventureInLibrary = useCallback((adventureId?: string) => {
     if (!adventureId) return false;
@@ -531,6 +545,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
       desiredTone, setDesiredTone,
       desiredLength, setDesiredLength,
       keyThemes, setKeyThemes,
+      adventureLanguage, setAdventureLanguage, // Expose language
 
       gameData, setGameData: setGameDataInternal,
       currentSceneId, setCurrentSceneId,
@@ -573,3 +588,5 @@ export const useGame = () => {
   }
   return context;
 };
+
+    

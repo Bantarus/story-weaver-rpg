@@ -3,8 +3,8 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { useGame, type SceneNode, type SceneChoice, type AnalyzeSourceMaterialOutput, type Effect } from "@/context/GameContext";
-import { useSettings } from "@/context/SettingsContext"; // Added
+import { useGame, type SceneNode, type SceneChoice, type AnalyzeSourceMaterialOutput, type Effect, type AdventureLanguage } from "@/context/GameContext";
+import { useSettings } from "@/context/SettingsContext"; 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -27,6 +27,7 @@ export default function PlayPage() {
     characterDescription,
     storyText, 
     analysisResult,
+    adventureLanguage, // Get adventureLanguage from context
     playerInventory,
     playerStatusEffects,
     playerAlignment, 
@@ -38,7 +39,7 @@ export default function PlayPage() {
     restartCurrentAdventure 
   } = useGame();
 
-  const { aiProvider, ollamaModel, isSettingsLoaded } = useSettings(); // Added
+  const { aiProvider, ollamaModel, isSettingsLoaded } = useSettings(); 
   
   const [currentScene, setCurrentScene] = useState<SceneNode | null>(null);
   const [showText, setShowText] = useState(false); 
@@ -170,7 +171,11 @@ export default function PlayPage() {
         playerAlignment: playerAlignment,
         playerInventory: playerInventory.length > 0 ? playerInventory : undefined,
         playerStatusEffects: playerStatusEffects.length > 0 ? playerStatusEffects : undefined,
-        aiSettings: { provider: aiProvider, ollamaModel: aiProvider === 'ollama' ? ollamaModel : undefined }
+        aiSettings: { 
+          provider: aiProvider, 
+          ollamaModel: aiProvider === 'ollama' ? ollamaModel : undefined,
+          language: adventureLanguage || "en-US" // Pass adventure language
+        }
       };
       
       const result = await generatePlaythroughStory(storyInput);
@@ -282,7 +287,6 @@ export default function PlayPage() {
           )}
         </CardContent>
          <CardFooter className="flex justify-center pt-0 pb-6">
-           {/* Button moved to end screen, but footer kept for potential future use */}
         </CardFooter>
       </Card>
 
@@ -462,3 +466,5 @@ export default function PlayPage() {
     </div>
   );
 }
+
+    

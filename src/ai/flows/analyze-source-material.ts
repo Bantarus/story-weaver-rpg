@@ -18,10 +18,10 @@ const AnalyzeSourceMaterialInputSchema = z.object({
   storyText: z
     .string()
     .describe('The text of the story to analyze. This is the source material for the RPG.'),
-  // Added for model selection
   aiSettings: z.object({
     provider: z.enum(['googleAI', 'ollama']).optional().default('googleAI'),
     ollamaModel: z.string().optional(),
+    language: z.string().optional().default('en-US').describe("The language for the AI to understand the input and generate output, e.g., 'en-US', 'es-ES'."),
   }).optional(),
 });
 export type AnalyzeSourceMaterialInput = z.infer<typeof AnalyzeSourceMaterialInputSchema>;
@@ -44,12 +44,13 @@ const analyzeSourceMaterialPromptObj = ai.definePrompt({
   input: {schema: AnalyzeSourceMaterialInputSchema},
   output: {schema: AnalyzeSourceMaterialOutputSchema},
   prompt: `You are a literary analyst tasked with dissecting a story to extract its core elements.
+  The story is written in {{{aiSettings.language}}}. Please provide your analysis in {{{aiSettings.language}}} as well.
 
   Analyze the following story text and identify the key plot points, important characters, key settings, underlying themes, and overall tone.
 
   Story Text: {{{storyText}}}
 
-  Format your response as a JSON object with the following keys:
+  Format your response as a JSON object with the following keys, ensuring all textual values are in {{{aiSettings.language}}}:
   - plotPoints: Key plot points of the story.
   - characters: Important characters in the story.
   - settings: Key settings and locations in the story.
@@ -64,15 +65,17 @@ const analyzeSourceMaterialFlow = ai.defineFlow(
     outputSchema: AnalyzeSourceMaterialOutputSchema,
   },
   async (input) => {
-    let modelName = 'googleai/gemini-2.0-flash'; // Default model
+    let modelName = 'googleai/gemini-2.0-flash'; 
     if (input.aiSettings?.provider === 'ollama' && input.aiSettings?.ollamaModel) {
       modelName = `ollama/${input.aiSettings.ollamaModel}`;
     }
 
     const {output} = await analyzeSourceMaterialPromptObj(
-        { storyText: input.storyText }, // Pass only relevant fields to prompt
+        input, // Pass full input including aiSettings for prompt's language templating
         { model: modelName }
     );
     return output!;
   }
 );
+
+    

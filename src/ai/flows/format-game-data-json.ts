@@ -15,10 +15,10 @@ const FormatGameDataJsonInputSchema = z.object({
   narrativeOutline: z
     .string()
     .describe('The narrative outline to be formatted into structured game JSON data.'),
-  // Added for model selection
   aiSettings: z.object({
     provider: z.enum(['googleAI', 'ollama']).optional().default('googleAI'),
     ollamaModel: z.string().optional(),
+    language: z.string().optional().default('en-US').describe("The language for the AI to generate output, e.g., 'en-US', 'es-ES'."),
   }).optional(),
 });
 export type FormatGameDataJsonInput = z.infer<typeof FormatGameDataJsonInputSchema>;
@@ -75,16 +75,17 @@ export async function formatGameDataJson(
 const formatGameDataJsonPromptObj = ai.definePrompt({
   name: 'formatGameDataJsonPrompt',
   input: {schema: FormatGameDataJsonInputSchema},
-  // Output schema removed here; validation will be done after manual processing
   prompt: `You are an expert game designer specializing in creating interactive, text-based RPG adventures.
 Your task is to take a narrative outline and transform it into a structured JSON game dataset.
 The game should be a branching narrative where the player makes choices that lead to different scenes and outcomes.
 It should also include effects that can alter the player's state (items or status effects), and choices should reflect moral alignment shifts.
+Please ensure all textual content (titles, scene text, choice text, effect descriptions, etc.) is generated in the language specified: {{{aiSettings.language}}}.
 
-Narrative Outline:
+Narrative Outline (in {{{aiSettings.language}}}):
 {{{narrativeOutline}}}
 
 Please generate a JSON object adhering to the following structure. All string fields are required; if a feature is not applicable for a particular scene (e.g. title, visualHint, soundEffect, endingType), provide an empty string (""). For boolean fields like 'isEnding', provide true or false. Ensure 'endingType' is "none" if 'isEnding' is false or no specific type. 'choices' should be an empty array for ending scenes. Effects and alignmentEffect should also be their defaults (empty array or 0) if not applicable.
+All textual output must be in {{{aiSettings.language}}}.
 
 - \`title\` (string): An engaging title for the entire adventure. Use an empty string if not applicable. Default: "".
 - \`startSceneId\` (string): The ID of the scene where the game should begin. This must be the 'id' of one of the scenes in the \`scenes\` array.
@@ -126,13 +127,13 @@ const formatGameDataJsonFlow = ai.defineFlow(
     outputSchema: AIGameDataSchema, 
   },
   async (input): Promise<FormatGameDataJsonOutput> => { 
-    let modelName = 'googleai/gemini-2.0-flash'; // Default model
+    let modelName = 'googleai/gemini-2.0-flash'; 
     if (input.aiSettings?.provider === 'ollama' && input.aiSettings?.ollamaModel) {
       modelName = `ollama/${input.aiSettings.ollamaModel}`;
     }
 
     const llmResponse = await formatGameDataJsonPromptObj(
-        { narrativeOutline: input.narrativeOutline }, // Pass only relevant fields to prompt
+        input, // Pass full input for language
         { model: modelName }
     ); 
     let aiOutputText = llmResponse.text;
@@ -142,7 +143,6 @@ const formatGameDataJsonFlow = ai.defineFlow(
       throw new Error('AI failed to generate game data text.');
     }
 
-    // Clean up Markdown fences if present
     aiOutputText = aiOutputText.trim();
     if (aiOutputText.startsWith("```json")) {
       aiOutputText = aiOutputText.substring(7); 
@@ -167,25 +167,21 @@ const formatGameDataJsonFlow = ai.defineFlow(
 
     let scenesArrayFromAI: AISceneNode[];
     if (parsedJsonFromAI.scenes && typeof parsedJsonFromAI.scenes === 'object' && !Array.isArray(parsedJsonFromAI.scenes)) {
-      // AI returned scenes as an object, convert to array
       console.warn('AI returned scenes as an object, converting to array for processing.');
       scenesArrayFromAI = Object.values(parsedJsonFromAI.scenes);
     } else if (parsedJsonFromAI.scenes && Array.isArray(parsedJsonFromAI.scenes)) {
-      // AI returned scenes as an array, use directly
       scenesArrayFromAI = parsedJsonFromAI.scenes;
     } else {
       console.error('AI output structure error. `scenes` field was not an array or object:', parsedJsonFromAI.scenes);
       throw new Error('AI output did not contain a valid scenes structure (expected array or object).');
     }
     
-    // This is the structure matching AIGameDataSchema, to be returned by the flow
     const aiOutputForProcessing: FormatGameDataJsonOutput = {
       title: parsedJsonFromAI.title || "", 
       startSceneId: parsedJsonFromAI.startSceneId || "", 
       scenes: scenesArrayFromAI, 
     };
 
-    // Validate and potentially correct startSceneId
     try {
         const validatedData = AIGameDataSchema.parse(aiOutputForProcessing);
         
@@ -200,7 +196,7 @@ const formatGameDataJsonFlow = ai.defineFlow(
           }
         }
         console.log("formatGameDataJsonFlow: Successfully parsed and validated AI output. Returning data matching AIGameDataSchema.");
-        return validatedData; // This now directly returns what matches AIGameDataSchema
+        return validatedData; 
     } catch (validationError) {
         console.error("Processed AI output does not match AIGameDataSchema:", validationError);
         console.error("Data that failed validation:", JSON.stringify(aiOutputForProcessing, null, 2));
@@ -208,3 +204,5 @@ const formatGameDataJsonFlow = ai.defineFlow(
     }
   }
 );
+
+    

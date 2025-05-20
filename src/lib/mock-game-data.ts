@@ -12,6 +12,7 @@ const removeCurseEffect: Effect = { type: "REMOVE_STATUS", value: "cursed", desc
 export const mockGameData: GameData = {
   title: "The Mockingbird's Secret",
   startSceneId: "intro",
+  language: "en-US", // Added language
   scenes: {
     "intro": {
       id: "intro",
@@ -209,3 +210,5 @@ export const mockGameData: GameData = {
     }
   }
 };
+
+    

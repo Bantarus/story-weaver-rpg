@@ -1,5 +1,5 @@
 
-// 'use server';
+'use server';
 /**
  * @fileOverview A narrative outline generation AI agent. This agent takes a story and a character description as input, and generates a narrative outline that integrates the character into the story.
  *
@@ -7,8 +7,6 @@
  * - GenerateNarrativeOutlineInput - The input type for the generateNarrativeOutline function.
  * - GenerateNarrativeOutlineOutput - The return type for the generateNarrativeOutline function.
  */
-
-'use server';
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
@@ -32,10 +30,10 @@ const GenerateNarrativeOutlineInputSchema = z.object({
     .string()
     .optional()
     .describe('Specific themes from the source story or character goals that the user wants to emphasize in the narrative outline.'),
-  // Added for model selection
   aiSettings: z.object({
     provider: z.enum(['googleAI', 'ollama']).optional().default('googleAI'),
     ollamaModel: z.string().optional(),
+    language: z.string().optional().default('en-US').describe("The language for the AI to generate output, e.g., 'en-US', 'es-ES'."),
   }).optional(),
 });
 export type GenerateNarrativeOutlineInput = z.infer<
@@ -66,8 +64,9 @@ const generateNarrativeOutlinePromptObj = ai.definePrompt({
   prompt: `You are a master storyteller and RPG narrative outline generator.
 Your task is to take a source story text and a player character description, and weave a compelling narrative outline that integrates the character into the story.
 The outline should describe the character's journey, including key plot points, challenges, encounters, and potential resolutions.
+Please generate the narrative outline in the following language: {{{aiSettings.language}}}.
 
-Consider the following inputs:
+Consider the following inputs (all character and story inputs are also in {{{aiSettings.language}}}):
 
 Source Story Text:
 {{{storyText}}}
@@ -94,11 +93,11 @@ Key Themes to Emphasize: {{{keyThemes}}}
 Try to weave these themes into the character's journey and the challenges they face.
 {{/if}}
 
-Generate a detailed narrative outline below. This outline will be used to create a structured text-based RPG.
+Generate a detailed narrative outline below in {{{aiSettings.language}}}. This outline will be used to create a structured text-based RPG.
 Focus on creating a clear progression for the player character within the provided story's world.
 The outline should be a single block of text.
 
-Narrative Outline: `,
+Narrative Outline (in {{{aiSettings.language}}}): `,
 });
 
 const generateNarrativeOutlineFlow = ai.defineFlow(
@@ -108,24 +107,17 @@ const generateNarrativeOutlineFlow = ai.defineFlow(
     outputSchema: GenerateNarrativeOutlineOutputSchema,
   },
   async (input) => {
-    let modelName = 'googleai/gemini-2.0-flash'; // Default model
+    let modelName = 'googleai/gemini-2.0-flash'; 
     if (input.aiSettings?.provider === 'ollama' && input.aiSettings?.ollamaModel) {
       modelName = `ollama/${input.aiSettings.ollamaModel}`;
     }
     
-    // Filter input for the prompt to only include fields defined in its schema
-    const promptInput = {
-        storyText: input.storyText,
-        characterDescription: input.characterDescription,
-        desiredTone: input.desiredTone,
-        desiredLength: input.desiredLength,
-        keyThemes: input.keyThemes,
-    };
-
-    const {output} = await generateNarrativeOutlinePromptObj(promptInput, { model: modelName });
+    const {output} = await generateNarrativeOutlinePromptObj(input, { model: modelName });
     if (!output || !output.narrativeOutline) {
       throw new Error('AI failed to generate a narrative outline.');
     }
     return output;
   }
 );
+
+    

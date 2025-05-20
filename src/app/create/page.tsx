@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { useGame, type GameData, type SceneNode, type DesiredTone, type DesiredLength, type CharacterProfile, type AnalyzeSourceMaterialOutput } from "@/context/GameContext";
+import { useGame, type GameData, type SceneNode, type DesiredTone, type DesiredLength, type CharacterProfile, type AnalyzeSourceMaterialOutput, type AdventureLanguage } from "@/context/GameContext";
 import { useSettings } from "@/context/SettingsContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, BookText, UserPlus, Wand2, AlertCircle, CheckCircle, Play, Palette, Scale, Sparkles, RefreshCcw, Save, LibraryBig, UserCheck, Download, FileUp } from "lucide-react";
+import { Loader2, BookText, UserPlus, Wand2, AlertCircle, CheckCircle, Play, Palette, Scale, Sparkles, RefreshCcw, Save, LibraryBig, UserCheck, Download, FileUp, Globe } from "lucide-react"; // Added Globe
 import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
 
@@ -22,10 +22,17 @@ import { generateNarrativeOutline } from "@/ai/flows/generate-narrative-outline"
 import { formatGameDataJson, type FormatGameDataJsonOutput, type AISceneNode } from "@/ai/flows/format-game-data-json";
 import { mockGameData } from "@/lib/mock-game-data";
 
-const USE_MOCK_GENERATION = true;
+const USE_MOCK_GENERATION = true; // Set to false to use actual AI generation
 
 const toneOptions: DesiredTone[] = ["Default", "Heroic", "Mysterious", "Comedic", "Tragic", "Dramatic"];
 const lengthOptions: DesiredLength[] = ["Default", "Short", "Medium", "Long"];
+const languageOptions: { value: AdventureLanguage; label: string }[] = [
+  { value: "en-US", label: "English (US)" },
+  { value: "es-ES", label: "Español (España)" },
+  { value: "fr-FR", label: "Français (France)" },
+  { value: "de-DE", label: "Deutsch (Deutschland)" },
+  // Add more languages as needed
+];
 
 
 // Zod Schemas for Import Validation
@@ -68,7 +75,8 @@ const ImportGameDataSchema = z.object({
   adventureName: z.string().optional(),
   title: z.string().optional(),
   startSceneId: z.string(),
-  scenes: z.record(ImportSceneNodeSchema), // Expects scenes as a record
+  scenes: z.record(ImportSceneNodeSchema), 
+  language: z.string().optional(), // Added language
   storyText: z.string().optional(),
   characterDescription: z.string().optional(),
   analysisResult: AnalyzeSourceMaterialOutputSchemaForImport,
@@ -87,6 +95,7 @@ export default function CreatePage() {
     desiredTone, setDesiredTone,
     desiredLength, setDesiredLength,
     keyThemes, setKeyThemes,
+    adventureLanguage, setAdventureLanguage, // Language state
     gameData,
     setGameData,
     isLoading, setIsLoading,
@@ -163,7 +172,7 @@ export default function CreatePage() {
     try {
       const result = await analyzeSourceMaterial({
         storyText,
-        aiSettings: { provider: aiProvider, ollamaModel: aiProvider === 'ollama' ? ollamaModel : undefined }
+        aiSettings: { provider: aiProvider, ollamaModel: aiProvider === 'ollama' ? ollamaModel : undefined, language: adventureLanguage }
       });
       setAnalysisResult(result);
       toast({ title: "Story Analysis Complete", description: "Proceed to character creation.", className: "bg-primary text-primary-foreground" });
@@ -213,7 +222,7 @@ export default function CreatePage() {
         desiredTone: desiredTone === "Default" ? undefined : desiredTone,
         desiredLength: desiredLength === "Default" ? undefined : desiredLength,
         keyThemes: keyThemes || undefined,
-        aiSettings: { provider: aiProvider, ollamaModel: aiProvider === 'ollama' ? ollamaModel : undefined }
+        aiSettings: { provider: aiProvider, ollamaModel: aiProvider === 'ollama' ? ollamaModel : undefined, language: adventureLanguage }
       });
       setNarrativeOutline(result.narrativeOutline);
       toast({ title: "Narrative Outline Generated", description: "Ready to generate the full game data.", className: "bg-primary text-primary-foreground" });
@@ -235,21 +244,20 @@ export default function CreatePage() {
       let finalGameDataToSet: GameData | null = null;
 
       if (USE_MOCK_GENERATION) {
-        // Simulate the structure the AI flow would return (scenes as array) before conversion
         const mockAIScenesArray = Object.values(mockGameData.scenes);
         const mockAIOutput: FormatGameDataJsonOutput = {
             title: mockGameData.title,
             startSceneId: mockGameData.startSceneId,
-            scenes: mockAIScenesArray as AISceneNode[] // Cast for mock, AI would return this structure
+            scenes: mockAIScenesArray as AISceneNode[] 
         };
         
         const scenesRecord: Record<string, SceneNode> = {};
         mockAIOutput.scenes.forEach((aiScene: AISceneNode) => {
           scenesRecord[aiScene.id] = {
-            ...aiScene, // Spread existing AISceneNode fields
+            ...aiScene, 
             title: aiScene.title && aiScene.title.trim() !== "" ? aiScene.title.trim() : undefined,
             choices: aiScene.choices.map(choice => ({
-                ...choice, // Spread existing choice fields
+                ...choice, 
                 effects: choice.effects && choice.effects.length > 0 ? choice.effects : undefined,
                 alignmentEffect: typeof choice.alignmentEffect === 'number' ? choice.alignmentEffect : 0,
             })),
@@ -264,7 +272,7 @@ export default function CreatePage() {
           title: mockAIOutput.title,
           startSceneId: mockAIOutput.startSceneId,
           scenes: scenesRecord,
-          // Optionally include mock story context if you want to test that persistence
+          language: adventureLanguage, // Include language
           storyText: storyText || "Mock story text for this adventure.",
           characterDescription: characterDescription || "Mock character for this adventure.",
           analysisResult: analysisResult || null,
@@ -283,7 +291,7 @@ export default function CreatePage() {
 
         const aiFormattedOutput: FormatGameDataJsonOutput = await formatGameDataJson({
             narrativeOutline,
-            aiSettings: { provider: aiProvider, ollamaModel: aiProvider === 'ollama' ? ollamaModel : undefined }
+            aiSettings: { provider: aiProvider, ollamaModel: aiProvider === 'ollama' ? ollamaModel : undefined, language: adventureLanguage }
         });
 
         if (!aiFormattedOutput || !aiFormattedOutput.scenes || !aiFormattedOutput.startSceneId || aiFormattedOutput.scenes.length === 0) {
@@ -327,7 +335,7 @@ export default function CreatePage() {
           title: aiFormattedOutput.title && aiFormattedOutput.title.trim() !== "" ? aiFormattedOutput.title.trim() : undefined,
           startSceneId: finalStartSceneId,
           scenes: scenesRecord,
-          // Persist current creation context with the game data
+          language: adventureLanguage, // Include language
           storyText: storyText || undefined,
           characterDescription: characterDescription || undefined,
           analysisResult: analysisResult || undefined,
@@ -364,29 +372,28 @@ export default function CreatePage() {
     setTimeout(() => {
         console.log("setTimeout callback executed.");
         const defaultName = gameData.adventureName || gameData.title || "My Awesome Adventure";
-        let adventureName: string | null = null;
+        let adventureNameFromPrompt: string | null = null;
         try {
             console.log("About to call window.prompt with default:", defaultName);
-            adventureName = window.prompt("Enter a name for your adventure:", defaultName);
-            console.log("window.prompt returned:", adventureName);
+            adventureNameFromPrompt = window.prompt("Enter a name for your adventure:", defaultName);
+            console.log("window.prompt returned:", adventureNameFromPrompt);
         } catch (promptError) {
             console.error("Error during window.prompt for adventure name:", promptError);
             toast({ variant: "destructive", title: "Dialog Error", description: "Could not display the save name dialog." });
             return;
         }
 
-        if (adventureName === null) {
+        if (adventureNameFromPrompt === null) {
             console.log("Prompt cancelled by user.");
             toast({ title: "Save Cancelled", description: "Adventure was not saved." });
-        } else if (adventureName.trim() === "") {
+        } else if (adventureNameFromPrompt.trim() === "") {
             console.log("Prompt returned empty string: User entered no name.");
             toast({ variant: "destructive", title: "Save Error", description: "Adventure name cannot be empty. Please provide a valid name." });
         } else {
-            console.log("Attempting to save with name:", adventureName.trim());
-            if (saveAdventureToLibrary(adventureName.trim())) {
-                toast({ title: "Adventure Saved!", description: `"${adventureName.trim()}" has been saved to your library.`, className: "bg-primary text-primary-foreground" });
+            console.log("Attempting to save with name:", adventureNameFromPrompt.trim());
+            if (saveAdventureToLibrary(adventureNameFromPrompt.trim())) {
+                toast({ title: "Adventure Saved!", description: `"${adventureNameFromPrompt.trim()}" has been saved to your library.`, className: "bg-primary text-primary-foreground" });
             } else {
-                // This case might not be hit if saveAdventureToLibrary always returns true or errors out
                 toast({ variant: "destructive", title: "Save Failed", description: "Could not save the adventure." });
             }
         }
@@ -410,11 +417,12 @@ export default function CreatePage() {
       return;
     }
     try {
-      const fileNameBase = gameData.adventureName || gameData.title || "story-weaver-adventure";
+      const gameDataToExport = { ...gameData, language: adventureLanguage }; // Ensure language is in exported data
+      const fileNameBase = gameDataToExport.adventureName || gameDataToExport.title || "story-weaver-adventure";
       const safeFileNameBase = fileNameBase.replace(/[^a-z0-9_.-]/gi, '_').toLowerCase();
       const fileName = `${safeFileNameBase}_gamedata.json`;
 
-      const jsonString = JSON.stringify(gameData, null, 2);
+      const jsonString = JSON.stringify(gameDataToExport, null, 2);
       const blob = new Blob([jsonString], { type: "application/json" });
       const href = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -429,7 +437,7 @@ export default function CreatePage() {
       console.error("Error exporting game data:", exportError);
       toast({ variant: "destructive", title: "Export Failed", description: "Could not export game data." });
     }
-  }, [gameData, toast]);
+  }, [gameData, toast, adventureLanguage]);
 
   const handleImportButtonClick = () => {
     fileInputRef.current?.click();
@@ -455,12 +463,8 @@ export default function CreatePage() {
 
         if (validationResult.success) {
           const validatedGameData = validationResult.data;
-          // Cast to GameData type from context, as Zod's inferred type might be slightly different
-          // if we didn't perfectly align all optional/null properties.
-          // However, if ImportGameDataSchema is built to match GameData, this cast is mostly for TypeScript.
           setGameData(validatedGameData as unknown as GameData); 
           
-          // Optionally, update other context fields if they exist in the imported data
           if (validatedGameData.storyText) setStoryText(validatedGameData.storyText);
           else setStoryText("Imported Adventure: " + (validatedGameData.title || "Untitled Adventure"));
           
@@ -472,6 +476,8 @@ export default function CreatePage() {
           
           if (validatedGameData.analysisResult) setAnalysisResult(validatedGameData.analysisResult as AnalyzeSourceMaterialOutput);
           else setAnalysisResult(null);
+
+          if (validatedGameData.language) setAdventureLanguage(validatedGameData.language as AdventureLanguage); // Set language from import
           
           setCreationStep('generate');
           toast({ title: "Adventure Imported!", description: "The game data has been loaded.", className: "bg-primary text-primary-foreground" });
@@ -511,14 +517,13 @@ export default function CreatePage() {
 
   const handleTryAgainOnError = () => {
     setError(null);
-    // Attempt to go back to the most relevant previous step based on available data
-    if (gameData && narrativeOutline) { // If gameData was being generated but failed, retry generation
+    if (gameData && narrativeOutline) { 
         setCreationStep('generate');
-    } else if (narrativeOutline) { // If outline exists, error was likely in final game generation
+    } else if (narrativeOutline) { 
         setCreationStep('generate');
-    } else if (analysisResult) { // If analysis exists, error was likely in character/outline step
+    } else if (analysisResult) { 
         setCreationStep('character');
-    } else { // Default to story input if very early error
+    } else { 
         setCreationStep('story');
     }
   };
@@ -571,13 +576,12 @@ export default function CreatePage() {
         loadedProfile.goals === charGoals.trim()) {
       saveCharButtonText = "Character is Saved/Up-to-date";
       isCurrentCharSaved = true;
-    } else if (loadedProfile) { // Loaded and modified
+    } else if (loadedProfile) { 
       saveCharButtonText = "Update Character in Library";
-    } else { // loadedCharId is set but profile not found (should not happen)
-       saveCharButtonText = "Save Current Character to Library"; // Default back
+    } else { 
+       saveCharButtonText = "Save Current Character to Library"; 
     }
-  } else if (charName.trim() || charArchetype.trim() || charBackground.trim() || charGoals.trim()) { // New character being typed
-     // Check if the *current form content* matches an existing character in the library
+  } else if (charName.trim() || charArchetype.trim() || charBackground.trim() || charGoals.trim()) { 
      const existingCharInLib = savedCharacters.find(c =>
         c.name === charName.trim() &&
         c.archetype === charArchetype.trim() &&
@@ -585,9 +589,8 @@ export default function CreatePage() {
         c.goals === charGoals.trim()
       );
       if (existingCharInLib) {
-        saveCharButtonText = "Character is Saved/Up-to-date"; // Implies it matches one in lib
+        saveCharButtonText = "Character is Saved/Up-to-date"; 
         isCurrentCharSaved = true;
-        // setLoadedCharId(existingCharInLib.id); // Optionally set this to make save an "update"
       } else {
         saveCharButtonText = "Save Current Character to Library";
       }
@@ -662,7 +665,23 @@ export default function CreatePage() {
             <CardDescription>Paste the text of a book, short story, or any narrative you enjoy. This will be the world your character explores.</CardDescription>
           </CardHeader>
           <form onSubmit={handleStorySubmit}>
-            <CardContent>
+            <CardContent className="space-y-4">
+               <div>
+                <Label htmlFor="adventureLanguage" className="flex items-center gap-1"><Globe size={16}/> Adventure Language</Label>
+                <Select value={adventureLanguage} onValueChange={(value: AdventureLanguage) => setAdventureLanguage(value)} disabled={isLoading}>
+                  <SelectTrigger id="adventureLanguage">
+                    <SelectValue placeholder="Select language" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {languageOptions.map(lang => (
+                      <SelectItem key={lang.value} value={lang.value}>{lang.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  The AI will generate the adventure in this language.
+                </p>
+              </div>
               <Textarea
                 placeholder="Paste your story text here (min. 50 characters)..."
                 value={storyText || ""}
@@ -724,7 +743,7 @@ export default function CreatePage() {
                     type="button"
                     variant={isCurrentCharSaved ? "secondary" : "outline"}
                     onClick={handleSaveCurrentCharacterToLibrary}
-                    disabled={isLoading || !(charName.trim() || charArchetype.trim() || charBackground.trim() || charGoals.trim()) || isCurrentCharSaved}
+                    disabled={isLoading || !(charName.trim() && charArchetype.trim() && charBackground.trim() && charGoals.trim()) || isCurrentCharSaved}
                     className="w-full"
                   >
                     <Save className="mr-2 h-4 w-4" />
@@ -845,6 +864,7 @@ export default function CreatePage() {
                 <AlertDescription>
                   Your adventure data has been successfully generated or loaded.
                   {gameData.title && <p className="mt-1"><strong>Title:</strong> {gameData.title}</p>}
+                  {gameData.language && <p className="mt-1"><strong>Language:</strong> {languageOptions.find(l => l.value === gameData.language)?.label || gameData.language}</p>}
                    {gameData.scenes && gameData.startSceneId && gameData.scenes[gameData.startSceneId] &&
                     <p className="mt-1"><strong>Start Scene:</strong> {gameData.scenes[gameData.startSceneId]?.title || gameData.startSceneId}</p>
                    }

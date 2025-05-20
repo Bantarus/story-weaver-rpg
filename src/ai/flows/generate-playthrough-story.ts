@@ -29,7 +29,7 @@ const AnalysisResultSchemaForStory = z.object({
   settings: z.string().describe('Key settings and locations in the story.'),
   themes: z.string().describe('Underlying themes explored in the story.'),
   tone: z.string().describe('Overall tone and style of the story.'),
-}).optional().describe("Structured analysis of the original story: plot points, characters, settings, themes, tone.");
+}).nullable().optional().describe("Structured analysis of the original story: plot points, characters, settings, themes, tone.");
 
 
 const GeneratePlaythroughStoryInputSchema = z.object({
@@ -41,10 +41,10 @@ const GeneratePlaythroughStoryInputSchema = z.object({
   playerAlignment: z.number().optional().describe("The player's final alignment score."),
   playerInventory: z.array(z.string()).optional().describe("The player's final inventory items."),
   playerStatusEffects: z.array(z.string()).optional().describe("The player's final status effects."),
-  // Added for model selection
   aiSettings: z.object({
     provider: z.enum(['googleAI', 'ollama']).optional().default('googleAI'),
     ollamaModel: z.string().optional(),
+    language: z.string().optional().default('en-US').describe("The language for the AI to generate output, e.g., 'en-US', 'es-ES'."),
   }).optional(),
 });
 export type GeneratePlaythroughStoryInput = z.infer<typeof GeneratePlaythroughStoryInputSchema>;
@@ -66,8 +66,9 @@ const generatePlaythroughStoryPromptObj = ai.definePrompt({
   output: { schema: GeneratePlaythroughStoryOutputSchema },
   prompt: `You are a master storyteller. Your task is to transform a player's journey through a text-based RPG into a flowing, engaging narrative.
 This narrative MUST strictly follow the sequence of scenes and choices provided in the 'playedPath' array.
+All generated story text must be in the language: {{{aiSettings.language}}}.
 
-First, here is some context about the original source material the RPG adventure was based on:
+First, here is some context about the original source material the RPG adventure was based on (also in {{{aiSettings.language}}}):
 {{#if originalStoryText}}
 Original Story Text:
 {{{originalStoryText}}}
@@ -83,11 +84,11 @@ Key Elements from Original Story:
 ---
 {{/if}}
 
-Now, here is the specific context for the adventure the player experienced:
+Now, here is the specific context for the adventure the player experienced (player-provided context may be in any language, but your output MUST be in {{{aiSettings.language}}}):
 {{#if gameTitle}}Adventure Title: {{{gameTitle}}}{{/if}}
 {{#if characterDescription}}Player Character: {{{characterDescription}}}{{/if}}
 
-The player progressed through the following scenes, making the indicated choices:
+The player progressed through the following scenes, making the indicated choices (scene text and choice text are in {{{aiSettings.language}}}):
 
 {{#each playedPath}}
 Scene: {{#if sceneTitle}}'{{sceneTitle}}' (ID: {{sceneId}}){{else}}ID: {{sceneId}}{{/if}}
@@ -106,7 +107,7 @@ Ending Type: {{endingType}}
 {{/if}}
 {{/each}}
 
-Narrative Construction Rules:
+Narrative Construction Rules (Output in {{{aiSettings.language}}}):
 You will construct the story by processing each element from the 'playedPath' array, one by one, in the order they appear.
 
 For each scene in 'playedPath':
@@ -115,14 +116,14 @@ For each scene in 'playedPath':
 3. The story MUST conclude based on the 'sceneText' and 'endingType' of the *last* scene in the 'playedPath' array.
 
 CRITICAL: Do NOT include scenes or choices that are not part of the provided 'playedPath'. The story must be a direct account of the path taken by the player.
-Make the story engaging and readable. Do not just list scene texts; connect them smoothly as if narrating a continuous story, clearly driven by the player's choices as recorded in 'playedPath'.
+Make the story engaging and readable in {{{aiSettings.language}}}. Do not just list scene texts; connect them smoothly as if narrating a continuous story, clearly driven by the player's choices as recorded in 'playedPath'.
 
 {{#if playerAlignment}}The player's final moral alignment was {{playerAlignment}} (where positive is good, negative is evil, and zero is neutral). You can subtly reflect this in the tone of the ending if appropriate.{{/if}}
 {{#if playerInventory.length}}Final Inventory: {{#each playerInventory}}{{{this}}}{{#unless @last}}, {{/unless}}{{/each}}.{{/if}}
 {{#if playerStatusEffects.length}}Final Status Effects: {{#each playerStatusEffects}}{{{this}}}{{#unless @last}}, {{/unless}}{{/each}}.{{/if}}
 (If inventory or status effects are mentioned, only include them if they are narratively significant for the conclusion described by the final scene in 'playedPath').
 
-Generated Story:
+Generated Story (in {{{aiSettings.language}}}):
 `,
 });
 
@@ -133,14 +134,13 @@ const generatePlaythroughStoryFlow = ai.defineFlow(
     outputSchema: GeneratePlaythroughStoryOutputSchema,
   },
   async (input) => {
-    let modelName = 'googleai/gemini-2.0-flash'; // Default model
+    let modelName = 'googleai/gemini-2.0-flash'; 
     if (input.aiSettings?.provider === 'ollama' && input.aiSettings?.ollamaModel) {
       modelName = `ollama/${input.aiSettings.ollamaModel}`;
     }
 
-    // Filter input for the prompt
     const promptInput = { ...input };
-    delete promptInput.aiSettings; // Remove aiSettings from prompt input
+    // aiSettings is already part of the input schema, so it's fine to pass directly.
 
     const { output } = await generatePlaythroughStoryPromptObj(promptInput, { model: modelName });
     if (!output || !output.playthroughStory) {
@@ -149,3 +149,5 @@ const generatePlaythroughStoryFlow = ai.defineFlow(
     return output;
   }
 );
+
+    
