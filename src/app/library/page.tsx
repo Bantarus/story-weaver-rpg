@@ -1,8 +1,8 @@
 
 "use client";
 
-import { useState } from 'react';
-import { useGame, type CharacterProfile } from '@/context/GameContext';
+import { useState, useCallback } from 'react'; // Added useCallback
+import { useGame, type CharacterProfile, type GameData } from '@/context/GameContext'; // Added GameData
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertCircle, Play, Trash2, BookOpenText, PlusCircle, Frown, LibraryBig, Users, UserCog, UserCircle2, Edit3, Save, XCircle } from 'lucide-react';
+import { AlertCircle, Play, Trash2, BookOpenText, PlusCircle, Frown, LibraryBig, Users, UserCog, UserCircle2, Edit3, Save, XCircle, Download } from 'lucide-react'; // Added Download
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
@@ -64,6 +64,34 @@ export default function LibraryPage() {
       description: "The adventure has been removed from your library.",
     });
   };
+
+  const handleExportAdventureFromLibrary = useCallback((adventureId: string) => {
+    const adventureToExport = savedAdventures.find(adv => adv.id === adventureId);
+    if (!adventureToExport) {
+      toast({ variant: "destructive", title: "Cannot Export", description: "Adventure not found in library." });
+      return;
+    }
+    try {
+      const fileNameBase = adventureToExport.adventureName || adventureToExport.title || "story-weaver-adventure";
+      const safeFileNameBase = fileNameBase.replace(/[^a-z0-9_.-]/gi, '_').toLowerCase();
+      const fileName = `${safeFileNameBase}_gamedata.json`;
+
+      const jsonString = JSON.stringify(adventureToExport, null, 2);
+      const blob = new Blob([jsonString], { type: "application/json" });
+      const href = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = href;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(href);
+      toast({ title: "Game Data Exported", description: `Saved as ${fileName}`, className: "bg-primary text-primary-foreground" });
+    } catch (exportError) {
+      console.error("Error exporting game data from library:", exportError);
+      toast({ variant: "destructive", title: "Export Failed", description: "Could not export game data." });
+    }
+  }, [savedAdventures, toast]);
 
   const handleStartEditCharacter = (character: CharacterProfile) => {
     setEditingCharacterId(character.id);
@@ -168,25 +196,35 @@ export default function LibraryPage() {
                           : "No preview available."}
                      </p>
                   </CardContent>
-                  <CardFooter className="flex justify-end gap-2 border-t pt-4 mt-auto">
+                  <CardFooter className="grid grid-cols-3 gap-2 border-t pt-4 mt-auto">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleExportAdventureFromLibrary(adventure.id!)}
+                      disabled={!adventure.id}
+                      aria-label={`Export ${adventure.adventureName || "adventure"}`}
+                      className="col-span-1"
+                    >
+                      <Download className="mr-1.5 hidden sm:inline" size={16} /> Export
+                    </Button>
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => handleDeleteAdventure(adventure.id!)} 
                       disabled={!adventure.id}
                       aria-label={`Delete ${adventure.adventureName || "adventure"}`}
-                      className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                      className="text-destructive hover:bg-destructive/10 hover:text-destructive col-span-1"
                     >
-                      <Trash2 className="mr-1.5" size={16} /> Delete
+                      <Trash2 className="mr-1.5 hidden sm:inline" size={16} /> Delete
                     </Button>
                     <Button
                       size="sm"
                       onClick={() => handlePlayAdventure(adventure.id!)} 
                       disabled={!adventure.id}
                       aria-label={`Play ${adventure.adventureName || "adventure"}`}
-                      className="bg-primary hover:bg-primary/90"
+                      className="bg-primary hover:bg-primary/90 col-span-1"
                     >
-                      <Play className="mr-1.5" size={16} /> Play
+                      <Play className="mr-1.5 hidden sm:inline" size={16} /> Play
                     </Button>
                   </CardFooter>
                 </Card>
@@ -251,7 +289,6 @@ export default function LibraryPage() {
                                   {archetype}
                                 </SelectItem>
                               ))}
-                               {/* Add option for current archetype if not in common list */}
                                {editableCharacterData.archetype && !commonArchetypes.includes(editableCharacterData.archetype) && (
                                 <SelectItem value={editableCharacterData.archetype} className="text-base">
                                   {editableCharacterData.archetype} (Custom)
@@ -348,5 +385,6 @@ export default function LibraryPage() {
     </div>
   );
 }
+    
 
     
