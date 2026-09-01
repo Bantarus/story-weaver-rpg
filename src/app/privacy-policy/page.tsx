@@ -15,7 +15,7 @@ export default function PrivacyPolicyPage() {
         <CardContent>
           <ScrollArea className="h-[60vh] pr-4">
             <div className="prose max-w-none text-foreground">
-              <p className="text-lg font-semibold mb-4">Last Updated: [Date]</p>
+              <p className="text-lg font-semibold mb-4">Last Updated: September 1, 2026</p>
 
               <p>
                 Welcome to Story Weaver RPG. Your privacy is important to us. This Privacy Policy explains 
@@ -28,7 +28,7 @@ export default function PrivacyPolicyPage() {
                 (e.g., GDPR, CCPA).
               </p>
 
-              <h2 className="text-xl font-semibold mt-6 mb-2">1. Information We Collect (Placeholder)</h2>
+              <h2 className="text-xl font-semibold mt-6 mb-2">1. Information We Collect</h2>
               <p>
                 We may collect information about you in a variety of ways. The information we may collect 
                 via the Application depends on the content and materials you use, and includes:
@@ -50,7 +50,7 @@ export default function PrivacyPolicyPage() {
                 </li>
               </ul>
 
-              <h2 className="text-xl font-semibold mt-6 mb-2">2. Use of Your Information (Placeholder)</h2>
+              <h2 className="text-xl font-semibold mt-6 mb-2">2. Use of Your Information</h2>
               <p>
                 Having accurate information permits us to provide you with a smooth, efficient, and customized 
                 experience. Specifically, we may use information collected about you via the Application to:
@@ -62,7 +62,7 @@ export default function PrivacyPolicyPage() {
                 <li>Monitor and analyze usage and trends to improve your experience with the Application.</li>
               </ul>
 
-              <h2 className="text-xl font-semibold mt-6 mb-2">3. Disclosure of Your Information (Placeholder)</h2>
+              <h2 className="text-xl font-semibold mt-6 mb-2">3. Disclosure of Your Information</h2>
               <p>
                 We may share information we have collected about you in certain situations. Your information 
                 may be disclosed as follows:
@@ -81,7 +81,7 @@ export default function PrivacyPolicyPage() {
                 </li>
               </ul>
 
-              <h2 className="text-xl font-semibold mt-6 mb-2">4. Data Storage and Security (Placeholder)</h2>
+              <h2 className="text-xl font-semibold mt-6 mb-2">4. Data Storage and Security</h2>
               <p>
                 We use administrative, technical, and physical security measures to help protect your personal 
                 information. While we have taken reasonable steps to secure the personal information you provide 
@@ -89,13 +89,13 @@ export default function PrivacyPolicyPage() {
                 Adventures and characters you explicitly save are stored in your browser's localStorage.
               </p>
 
-              <h2 className="text-xl font-semibold mt-6 mb-2">5. Your Data Rights (Placeholder)</h2>
+              <h2 className="text-xl font-semibold mt-6 mb-2">5. Your Data Rights</h2>
               <p>
                 Depending on your location, you may have certain rights regarding your personal data, such as 
                 the right to access, correct, or delete your data.
               </p>
               
-              <h2 className="text-xl font-semibold mt-6 mb-2">6. Cookies and Tracking Technologies (Placeholder)</h2>
+              <h2 className="text-xl font-semibold mt-6 mb-2">6. Cookies and Tracking Technologies</h2>
               <p>
                 We may use cookies, web beacons, tracking pixels, and other tracking technologies on the 
                 Application to help customize the Application and improve your experience.
@@ -107,10 +107,10 @@ export default function PrivacyPolicyPage() {
                 posting the new Privacy Policy on this page.
               </p>
 
-              <h2 className="text-xl font-semibold mt-6 mb-2">8. Contact Us (Placeholder)</h2>
+              <h2 className="text-xl font-semibold mt-6 mb-2">8. Contact Us</h2>
               <p>
                 If you have questions or comments about this Privacy Policy, please contact us at: 
-                [Your Contact Email/Link]
+                <a href="https://github.com/Bantarus/story-weaver-rpg/issues" className="text-primary hover:underline">the project issue tracker on GitHub</a>
               </p>
             </div>
           </ScrollArea>

@@ -1,8 +1,10 @@
 
 {
-  "name": "nextn",
+  "name": "story-weaver-rpg",
   "version": "0.1.0",
   "private": true,
+  "description": "Turn any piece of writing into a playable, branching text RPG, powered by Genkit with Gemini or a local Ollama model.",
+  "license": "Apache-2.0",
   "scripts": {
     "dev": "next dev --turbopack -p 9002",
     "genkit:dev": "genkit start -- tsx src/ai/dev.ts",

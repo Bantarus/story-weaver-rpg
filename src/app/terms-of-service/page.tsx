@@ -15,7 +15,7 @@ export default function TermsOfServicePage() {
         <CardContent>
           <ScrollArea className="h-[60vh] pr-4">
             <div className="prose max-w-none text-foreground">
-              <p className="text-lg font-semibold mb-4">Last Updated: [Date]</p>
+              <p className="text-lg font-semibold mb-4">Last Updated: September 1, 2026</p>
 
               <h2 className="text-xl font-semibold mt-6 mb-2">1. Acceptance of Terms</h2>
               <p>
@@ -36,44 +36,44 @@ export default function TermsOfServicePage() {
                 and generate interactive narratives.
               </p>
               
-              <h2 className="text-xl font-semibold mt-6 mb-2">3. User Accounts (Placeholder)</h2>
+              <h2 className="text-xl font-semibold mt-6 mb-2">3. User Accounts</h2>
               <p>
                 If user accounts are implemented, you will be responsible for maintaining the confidentiality 
                 of your account and password and for restricting access to your computer.
               </p>
 
-              <h2 className="text-xl font-semibold mt-6 mb-2">4. User Content (Placeholder)</h2>
+              <h2 className="text-xl font-semibold mt-6 mb-2">4. User Content</h2>
               <p>
                 If users can submit or create content, outline the terms regarding ownership, rights, 
                 and responsibilities for that content.
               </p>
 
-              <h2 className="text-xl font-semibold mt-6 mb-2">5. Prohibited Conduct (Placeholder)</h2>
+              <h2 className="text-xl font-semibold mt-6 mb-2">5. Prohibited Conduct</h2>
               <p>
                 List activities that are not permitted on the Service.
               </p>
 
-              <h2 className="text-xl font-semibold mt-6 mb-2">6. Intellectual Property (Placeholder)</h2>
+              <h2 className="text-xl font-semibold mt-6 mb-2">6. Intellectual Property</h2>
               <p>
                 The Service and its original content (excluding content provided by users), features, 
-                and functionality are and will remain the exclusive property of [Your Company Name/Your Name] 
+                and functionality are and will remain the exclusive property of Bantarus 
                 and its licensors.
               </p>
 
-              <h2 className="text-xl font-semibold mt-6 mb-2">7. Termination (Placeholder)</h2>
+              <h2 className="text-xl font-semibold mt-6 mb-2">7. Termination</h2>
               <p>
                 We may terminate or suspend access to our Service immediately, without prior notice or 
                 liability, for any reason whatsoever, including without limitation if you breach the Terms.
               </p>
 
-              <h2 className="text-xl font-semibold mt-6 mb-2">8. Limitation of Liability (Placeholder)</h2>
+              <h2 className="text-xl font-semibold mt-6 mb-2">8. Limitation of Liability</h2>
               <p>
-                In no event shall [Your Company Name/Your Name], nor its directors, employees, partners, 
+                In no event shall Bantarus, nor its directors, employees, partners, 
                 agents, suppliers, or affiliates, be liable for any indirect, incidental, special, 
                 consequential or punitive damages...
               </p>
 
-              <h2 className="text-xl font-semibold mt-6 mb-2">9. Governing Law (Placeholder)</h2>
+              <h2 className="text-xl font-semibold mt-6 mb-2">9. Governing Law</h2>
               <p>
                 These Terms shall be governed and construed in accordance with the laws of 
                 [Your Jurisdiction], without regard to its conflict of law provisions.
@@ -86,9 +86,9 @@ export default function TermsOfServicePage() {
                 new terms taking effect.
               </p>
 
-              <h2 className="text-xl font-semibold mt-6 mb-2">11. Contact Us (Placeholder)</h2>
+              <h2 className="text-xl font-semibold mt-6 mb-2">11. Contact Us</h2>
               <p>
-                If you have any questions about these Terms, please contact us at [Your Contact Email/Link].
+                If you have any questions about these Terms, please contact us at <a href="https://github.com/Bantarus/story-weaver-rpg/issues" className="text-primary hover:underline">the project issue tracker on GitHub</a>.
               </p>
             </div>
           </ScrollArea>
